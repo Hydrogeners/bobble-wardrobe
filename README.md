@@ -4,9 +4,15 @@ An unofficial Windows launcher for Bobble League add-ons. Wardrobe is the only a
 
 ## Download
 
-[Download the preview release](https://github.com/Hydrogeners/bobble-wardrobe/releases/tag/v0.1.0-preview.2)
+[Download the preview release](https://github.com/Hydrogeners/bobble-wardrobe/releases/tag/v0.1.0-preview.3)
 
-**Development preview:** in-game skin attachment and clean-machine installation remain under validation. The executable is unsigned and the automatic skin-update feed is not configured. Review the release notes before installing.
+**Development preview:** in-game skin attachment and clean-machine installation remain under validation. The executable is not Windows code-signed. Review the release notes before installing.
+
+## Signed Wardrobe updates
+
+Preview 3 includes an HTTPS update feed and trusted Ed25519 public key. The launcher checks when opened; the installed helper checks hourly. Payload changes are applied only while Discord is fully closed.
+
+If you have Preview 1 or 2, download Preview 3 once, fully quit Discord, and choose **Install Wardrobe** again to upgrade the helper and payload. Old launchers cannot receive the update-feed configuration automatically. Future signed skin/JS updates do not require another executable download. Launcher/helper binary self-updates are not implemented.
 
 ## Wardrobe skins
 
