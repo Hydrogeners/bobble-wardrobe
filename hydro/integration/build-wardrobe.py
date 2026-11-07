@@ -1,6 +1,15 @@
 """Bundle the proven visual controller as an isolated per-bobble factory."""
 from pathlib import Path
 import json
+import base64
+import gzip
+import hashlib
+import argparse
+from compact_geometry import compact
+
+parser=argparse.ArgumentParser()
+parser.add_argument('--quality',action='store_true',default=True)
+args=parser.parse_args()
 
 ROOT = Path(__file__).parent
 source = (ROOT / 'visual-template.js').read_text(encoding='utf-8')
@@ -19,14 +28,36 @@ replace_once('return JSON.stringify(status());', 'return controller;')
 assert source.startswith('// TEMPORARY') and source.endswith('})();\n')
 body = source[source.index("  'use strict';"):source.rfind('})();')]
 factory = 'window.__bobbleCreateVisual = function(options) {\n' + body + '};\n'
-data = json.loads((ROOT / 'visual-repaired-data.json').read_text())
 nebula = json.loads((ROOT / 'visual-nebula-data.json').read_text())
 catalog = [
-    {'id': 'hydro', 'name': 'Hydro', 'description': 'Chestnut cap, glasses & tailored coat'},
-    {'id': 'nebula', 'name': 'Nebula', 'description': 'Green field jacket, silver-panel cap & gold-leaf base'},
+    {'id': 'hydro', 'name': 'Hydro', 'description': 'Redesigned detective cap, glasses, lavender tie & brown cape'},
+    {'id': 'miko', 'name': 'MIKO', 'description': 'Teal detective, brown fedora, gold monocle & tuxedo'},
+    {'id': 'todo', 'name': 'TODO', 'description': 'Scarred grin, purple shirt, silver pendant & dark jacket'},
+    {'id': 'jjcho', 'name': 'JJCHO', 'description': 'Graduation cap, gold tassel, curled moustache & red tie'},
+    {'id': 'augusto', 'name': 'AUGUSTO', 'description': 'White cloak, blue eyes, ornate gold crown & armor'},
+    {'id': 'flair', 'name': 'FLAIR', 'description': 'White feathers, red eyes, gold beak & regal brown coat'},
+    {'id': 'supa', 'name': 'SUPA', 'description': 'Red-and-white cap, blue jacket & yellow piping'},
+    {'id': 'duolingo', 'name': 'DUOLINGO', 'description': 'Top hat, carrot nose, checked blue scarf & snowy coat'},
+    {'id': 'spark', 'name': 'Spark', 'description': 'Green hair and cape, flower cap, planet pendant & gold-leaf base'},
+    {'id': 'nebula', 'name': 'Nebula · classic', 'description': 'Original green field jacket model; existing saved assignments preserved'},
 ]
-assets = ('window.__bobbleSkinAssets = ' + json.dumps({'hydro': data, 'nebula': nebula}, separators=(',', ':')) + ';\n'
-          + 'window.__bobbleSkinCatalog = ' + json.dumps(catalog, separators=(',', ':')) + ';\n')
+suffix='quality' if args.quality else 'fitted'
+models = {row['id']: json.loads((ROOT / ('visual-'+row['id']+'-'+suffix+'.json')).read_text()) for row in catalog if row['id'] != 'nebula'}
+models['nebula'] = nebula
+raw = json.dumps(compact(models), separators=(',', ':')).encode()
+assert len(raw) <= 64*1024*1024, 'Decoded asset budget exceeded'
+compressed = base64.b64encode(gzip.compress(raw, compresslevel=9, mtime=0)).decode()
+# Data-only compression, not code obfuscation. The decoder is vendored with
+# its MIT license; it has no runtime network dependency or game bindings.
+assets = ('// BEGIN WARDROBE ASSETS\n(function(){const module={exports:{}};const exports=module.exports;\n'
+          + '/* fflate 0.8.3 — third-party data decompression library\n' + (ROOT / 'lib/fflate-LICENSE.txt').read_text() + '\n*/\n'
+          + (ROOT / 'lib/fflate-0.8.3.js').read_text() + '\n'
+          + 'const packed=Uint8Array.from(atob('+json.dumps(compressed)+'),c=>c.charCodeAt(0));\n'
+          + 'const decoded=module.exports.gunzipSync(packed,{out:new Uint8Array('+str(len(raw))+')});\n'
+          + 'if(decoded.length!=='+str(len(raw))+')throw Error("Invalid bundled assets");\n'
+          + (ROOT / 'expand-geometry.js').read_text() + '\n'
+          + 'window.__bobbleSkinAssets=expandQualityGeometry(JSON.parse(module.exports.strFromU8(decoded)));})();\n'
+          + 'window.__bobbleSkinCatalog = ' + json.dumps(catalog, separators=(',', ':')) + ';\n// END WARDROBE ASSETS\n')
 bundle = '\n'.join([
     '// Bobble wardrobe: session-local cosmetics. Build-specific; no gameplay writes.',
     '(function(){ if(window.__bobbleWardrobe){window.__bobbleWardrobe.show();return;}\n',
@@ -42,7 +73,9 @@ bundle = '\n'.join([
     (ROOT / 'skin-showroom.js').read_text(encoding='utf-8'),
     '})();\n',
 ])
+assert len(bundle.encode()) <= (24 if args.quality else 6)*1024*1024, 'Signed update file-size budget exceeded'
 (ROOT / 'wardrobe-live.js').write_text(bundle, encoding='utf-8')
+(ROOT / 'fitted-bundle-report.json').write_text(json.dumps({'variant':suffix,'assetBytes':len(raw),'bundledBytes':len(bundle.encode()),'decodedSHA256':hashlib.sha256(raw).hexdigest(),'skins':len(catalog),'compression':'gzip; fflate 0.8.3, MIT; quality geometry byte planes'},indent=2))
 (ROOT / 'visual-factory.js').write_text(factory, encoding='utf-8')
 upgrade = """(() => {
   const old=window.__bobbleWardrobe;

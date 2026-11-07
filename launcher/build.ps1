@@ -1,7 +1,20 @@
-param([string]$DistPath='release-preview')
+param([string]$DistPath='release-preview-native-scale',[switch]$Quality=$true)
 $ErrorActionPreference='Stop'
 Push-Location $PSScriptRoot
 try {
+    Push-Location (Join-Path $PSScriptRoot '..\hydro\integration')
+    try {
+        $variantArgs=@()
+        if($Quality){$variantArgs=@('--quality');$env:BOBBLE_ASSET_VARIANT='quality'}else{throw 'The crumpled fitted model build is retired; use the quality build'}
+        python build-wardrobe.py @variantArgs
+        if($LASTEXITCODE -ne 0){throw 'Wardrobe asset bundle failed'}
+        python -m unittest -v test_fitted_assets.py test_visual_envelope.py test_nebula_rig.py test_base_styles.py test_native_scale.py
+        if($LASTEXITCODE -ne 0){throw 'Wardrobe geometry validation failed'}
+        foreach($test in @('compact-geometry-test.cjs','fitted-bundle-test.cjs','visual-test.cjs','preview-test.cjs','wardrobe-test.cjs','aim-accent-test.cjs')) {
+            node $test @variantArgs
+            if($LASTEXITCODE -ne 0){throw "Wardrobe test failed: $test"}
+        }
+    } finally { Pop-Location }
     python build_payload.py
     if($LASTEXITCODE -ne 0){throw 'Bundle build failed'}
     python -m unittest -v test_install_core.py test_signed_updates.py test_maintenance.py test_channel_manager.py test_background.py test_sign_release.py test_windows_processes.py test_windows_signing.py

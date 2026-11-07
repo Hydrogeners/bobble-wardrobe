@@ -2,6 +2,8 @@ import base64
 import hashlib
 import json
 import unittest
+from unittest.mock import patch
+from payload_limits import file_limit
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 from cryptography.exceptions import InvalidSignature
@@ -39,5 +41,18 @@ class UpdateTests(unittest.TestCase):
     def test_http_refused_without_network(self):
         with self.assertRaises(ValueError):download('http://example.com/update')
     def test_unconfigured_no_network(self):self.assertIsNone(fetch({'feed':None,'publicKey':None},1))
+    def test_only_model_bundle_gets_larger_allowance(self):
+        self.assertEqual(file_limit('wardrobe-live.js'),24*1024*1024)
+        self.assertEqual(file_limit('main.cjs'),6*1024*1024)
+        self.assertEqual(file_limit('activity.js'),6*1024*1024)
+    def test_file_specific_limit_is_enforced_after_signature(self):
+        # Small substituted budgets exercise both boundaries without large fixtures.
+        for name in FILES:
+            content=b'//'+b'X'*20
+            self.data['files'][name]={'sha256':hashlib.sha256(content).hexdigest(),'content':base64.b64encode(content).decode()}
+        with patch('signed_updates.file_limit',lambda name:24 if name=='wardrobe-live.js' else 22):
+            self.assertEqual(verify(self.signed(),self.public,1).number,2)
+        with patch('signed_updates.file_limit',lambda name:21):
+            with self.assertRaisesRegex(ValueError,'file size'):verify(self.signed(),self.public,1)
 
 if __name__=='__main__':unittest.main()

@@ -4,8 +4,13 @@ The MIT license covers this project's original code and contributions to the
 extent the contributors hold the rights. It does not grant rights to underlying
 characters, trademarks, reference illustrations, Discord or Bobble League assets.
 
-Hydro and Nebula are fan-art bobble adaptations of user-supplied illustrations,
-referencing Ranpo Edogawa (Bungo Stray Dogs) and N (Pokémon). Original reference
+Hydro, MIKO, TODO, JJCHO, AUGUSTO, FLAIR, SUPA, DUOLINGO, Spark and classic Nebula
+are fan-art bobble adaptations of user-supplied illustrations, including
+references to Bungo Stray Dogs and Pokémon. The nine quality models were
+generated using Meshy's image-to-3D service and subsequently fitted/repaired;
+Meshy's service terms apply separately from this project's code license. Do not
+assume the project's MIT license grants rights to generated or underlying art.
+Original reference
 illustrations are not redistributed. The authored mesh generators and exports
 are included for inspection and editing; underlying character/design rights
 remain with their respective owners. Do not assume a commercial character license.
@@ -16,13 +21,19 @@ Build identifiers and function signatures document compatibility checks.
 
 ## Dependencies
 
-Dependencies are installed from their upstream distributions; third-party source
-and native libraries are not vendored here. Their licenses still apply to builds.
+Most dependencies are installed from their upstream distributions. Two JavaScript
+libraries are vendored under `hydro/integration/lib/` with their full license texts:
+
+- fflate 0.8.3: MIT, runtime gzip decoder (`fflate-LICENSE.txt`).
+- meshoptimizer: MIT, offline mesh simplifier (`meshoptimizer-LICENSE.md`).
+
+Their licenses and those below still apply to builds.
 
 - Python / Tk / Tcl: PSF and Tcl/Tk licenses, included in their distributions.
 - cryptography: Apache-2.0 OR BSD-3-Clause; includes upstream native dependencies.
 - PyInstaller: GPL-2.0-or-later with its bootloader exception.
 - NumPy: BSD-3-Clause (asset preparation only).
+- Pillow: HPND (optional atlas preparation only).
 - fast-simplification: MIT (asset preparation only).
 - Blender: GPL (external model-authoring tool; not bundled into the launcher).
 

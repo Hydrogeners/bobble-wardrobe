@@ -1,0 +1,50 @@
+"""Measured visual dimensions and preservation; no collider/live claims."""
+import base64
+import copy
+import json
+import gzip
+from pathlib import Path
+import unittest
+import numpy as np
+from native_scale import fit_native_parts,read,ORIGIN,HEAD_WIDTH,BODY_WIDTH,HEAD_LOW
+
+ROOT=Path(__file__).parent
+BACKUP=ROOT.parent/'assets'/'quality-payload-11-json'
+NAMES='hydro miko todo jjcho augusto flair supa duolingo spark'.split()
+
+class NativeScaleTests(unittest.TestCase):
+    def test_all_models_match_native_part_dimensions(self):
+        for name in NAMES:
+            with self.subTest(name=name):
+                source=BACKUP/f'visual-{name}-quality.json'
+                before=json.loads(source.read_text() if source.exists() else gzip.decompress(source.with_suffix('.json.gz').read_bytes()))
+                after=json.loads((ROOT/f'visual-{name}-quality.json').read_text())
+                expected=copy.deepcopy(before['parts'])
+                metadata=fit_native_parts(expected)
+                self.assertEqual(after['parts'],expected)
+                self.assertEqual(after['nativeScale'],metadata)
+                self.assertEqual(after['palette'],before['palette'])
+                for kind,part in after['parts'].items():
+                    old=before['parts'][kind]
+                    for key in ['uv','index','vertices','indices','sourceNodes']:
+                        self.assertEqual(part[key],old[key])
+                    self.assertLess(np.abs(np.linalg.norm(read(part,'normal'),axis=1)-1).max(),1e-4)
+                ball=read(after['parts']['base'],'position')
+                np.testing.assert_allclose(np.linalg.norm(ball,axis=1),.5,atol=.0001)
+                body=read(after['parts']['body'],'position')+ORIGIN['body']
+                self.assertAlmostEqual(np.ptp(body[:,0]),BODY_WIDTH,places=3)
+                self.assertGreaterEqual(body[:,1].min(),.17)
+                self.assertAlmostEqual(body[:,1].max(),1.1729294,places=3)
+                source=read(before['parts']['head'],'position')+ORIGIN['head']
+                mask=(source[:,1]>1.30)&(source[:,1]<1.65)
+                head=read(after['parts']['head'],'position')+ORIGIN['head']
+                self.assertAlmostEqual(np.ptp(head[mask,0]),HEAD_WIDTH,places=3)
+                self.assertAlmostEqual(head[:,1].min(),HEAD_LOW,places=3)
+                # A uniform positive head transform cannot melt facial geometry
+                # or flip triangles; normals/topology are preserved exactly.
+                self.assertEqual(before['parts']['head']['normal'],after['parts']['head']['normal'])
+                scale=metadata['parts']['head']['uniform']
+                delta=head-source*scale
+                np.testing.assert_allclose(delta,np.broadcast_to(delta.mean(0),delta.shape),atol=.0001)
+
+if __name__=='__main__':unittest.main()

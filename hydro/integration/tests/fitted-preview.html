@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fitted Wardrobe models · local review</title>
+<style>
+body{margin:24px;background:#eef1e7;color:#283124;font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+h1{font-size:27px;font-weight:400;margin:0 0 8px}p{margin:0 0 24px;max-width:70ch}
+main{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+figure{margin:0;min-width:0}canvas{display:block;width:100%;height:370px;background:#e2e7da}
+figcaption{padding:8px 0 16px}small{display:block}.error{color:#634a15}
+@media(max-width:700px){main{grid-template-columns:repeat(2,minmax(0,1fr))}canvas{height:300px}}
+</style>
+<h1>Fitted Wardrobe models</h1>
+<p>Actual optimized runtime geometry and textures. Drag to rotate; J/L to turn, Home to reset. Visual reference bounds—not a measured collider or native gameplay validation.</p>
+<main></main>
+<script src="../preview-rig.js"></script>
+<script src="../skin-accents.js"></script>
+<script src="../skin-preview.js"></script>
+<script>
+window.__views={};window.__errors=[];
+(async()=>{
+ for(const id of ['hydro','miko','todo','jjcho','augusto','flair','supa','duolingo','spark']){
+  const figure=document.createElement('figure'),canvas=document.createElement('canvas'),caption=document.createElement('figcaption');
+  canvas.tabIndex=0;canvas.setAttribute('aria-label',id+' rotatable model');figure.append(canvas,caption);document.querySelector('main').append(figure);
+  const suffix=new URLSearchParams(location.search).has('quality')?'quality':'fitted';
+  const data=await fetch('../visual-'+id+'-'+suffix+'.json').then(r=>r.json());
+  const view=window.__createBobblePreview(canvas,error=>{if(error){window.__errors.push(id+': '+error);caption.className='error';caption.textContent=error;}});
+  view.setData(data);view.visible(true);window.__views[id]=view;
+  if(!caption.className){caption.textContent=id.toUpperCase();const details=document.createElement('small');details.textContent=view.info().triangles.toLocaleString()+' triangles · '+data.textureSize+'px atlas';caption.append(details);}
+ }
+ document.title=window.__errors.length?'FAILED fitted preview':'READY fitted preview';
+})();
+</script>

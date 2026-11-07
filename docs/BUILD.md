@@ -18,7 +18,7 @@ cd launcher
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-Output: `launcher/release-preview/BobbleWardrobe-Preview.exe`.
+Output: `launcher/release-preview-native-scale/BobbleWardrobe-Preview.exe`.
 The script prepares the bundle, runs installer/update/transport tests, packages
 Python/Tk with PyInstaller, and tests the frozen helper against isolated fixtures.
 It does not register real startup work or modify a real Discord installation.
@@ -32,12 +32,13 @@ install a standalone executable helper; use the built executable for end-user se
 From `hydro/integration`:
 
 ```powershell
-node preview-test.cjs
+node preview-test.cjs --quality
 node visual-test.cjs
 node wardrobe-test.cjs
 node aim-accent-test.cjs
-python -m unittest -v test_visual_envelope.py test_nebula_rig.py
-python build-wardrobe.py
+$env:BOBBLE_ASSET_VARIANT='quality'
+python -m unittest -v test_visual_envelope.py test_nebula_rig.py test_fitted_assets.py test_base_styles.py test_native_scale.py
+python build-wardrobe.py --quality
 ```
 
 Then rerun `launcher/build.ps1` to copy the new JS bundle and package it.
@@ -46,7 +47,22 @@ Use `python -m http.server 8765 --bind 127.0.0.1` in `hydro/integration` for
 The existing browser resize regression has an unresolved failure in some automated
 browser environments; it is not a completed Discord pop-out validation.
 
-## Optional model authoring
+## Quality model source
+
+The nine canonical `visual-*-quality.json` files are the inspectable runtime
+geometry and atlases. Rebuilding the bundle/launcher needs no Blender, game
+assets or paid service. Gzipped payload-10/11 JSON fixtures under `hydro/assets/`
+let preservation tests verify the quality and native-size transforms.
+
+`hydro/fit_meshy.py`, `rolling_base.py`, and
+`integration/simplify-quality.mjs`, `prepare_visual.py`, `base_styles.py` and
+`native_scale.py` document the authoring pipeline. The original private Meshy
+study `.blend` files and reference illustrations are not redistributed. To
+re-author from your own study, use Blender 4.5 and the vendored meshoptimizer
+simplifier (license in `integration/lib/`). `prepare_visual.py` additionally
+needs Pillow; ordinary builds use the checked-in canonical JSON instead.
+
+## Optional classic model authoring
 
 Use Blender 4.5; install `hydro/requirements-assets.txt` in your Python environment.
 From `hydro`, run each generator with Blender's background Python:
@@ -66,6 +82,12 @@ Asset tools use NumPy and fast-simplification; they are not shipped inside the a
 Do not regenerate rig transforms from proprietary bundles for ordinary builds.
 
 ## Publishing and trust
+
+Preview 4+ uses `wardrobe-quality-update.json`; do not replace the legacy
+`wardrobe-update.json` with a quality payload. Older launchers have smaller
+size limits. The one-time migration is downloading the new executable and
+choosing Install Wardrobe while Discord is closed. The signed feed updates
+JavaScript payloads only, not launcher/helper binaries.
 
 Signing/publishing scripts are maintainer-only and not packaged. Forks can build
 without a signing key; before distributing a fork, replace or disable the upstream

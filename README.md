@@ -5,7 +5,7 @@ Wardrobe is the only implemented add-on. This repository is separate from Bobble
 
 ## Download
 
-**[Download Preview 3](https://github.com/Hydrogeners/bobble-wardrobe/releases/tag/v0.1.0-preview.3)** · [Build it yourself](docs/BUILD.md) · [Security and privacy](SECURITY.md)
+**[Download Preview 4](https://github.com/Hydrogeners/bobble-wardrobe/releases/tag/v0.1.0-preview.4)** · [Build it yourself](docs/BUILD.md) · [Security and privacy](SECURITY.md)
 
 > **Development preview, not a finished product.** Native in-match attachment,
 > Discord pop-out behavior and fresh-machine installation still need validation.
@@ -18,8 +18,11 @@ Wardrobe is the only implemented add-on. This repository is separate from Bobble
 2. Open `BobbleWardrobe-Preview.exe`, select your installation, and choose **Install Wardrobe**.
 3. Reopen Discord and launch Bobble League. Use the Wardrobe button to select a skin.
 
-**Preview 1/2 users:** download Preview 3 once and choose Install Wardrobe again.
-This upgrades the installed helper and enables the signed update feed.
+**Preview 1–3 users:** download Preview 4 once and choose **Install Wardrobe**
+again while Discord is fully closed. This upgrades the launcher/helper and moves
+you to the quality-model feed. Older launchers cannot accept the larger models;
+their original feed and Preview 3 remain available and unchanged. Launcher/helper
+executables do not update themselves automatically.
 
 To remove it, fully quit Discord, open the launcher and choose **Uninstall**.
 Uninstall disables maintenance and removes the owned startup helper. Unknown
@@ -27,9 +30,14 @@ conflicts are retained rather than overwritten. See [how it works](docs/ARCHITEC
 
 ## Skins
 
-- **Hydro:** chestnut cap, reflective glasses and a brown detective cape.
-- **Nebula:** green hair, a black-and-white cap with a flower, green jacket,
-  planet pendant and white-and-gold rolling base.
+- **Hydro, MIKO, TODO, JJCHO, AUGUSTO, FLAIR, SUPA, DUOLINGO and Spark:** textured
+  quality models with reference-specific rolling bases, repaired surface
+  orientation and corrected head/body/ball dimensions.
+- **Nebula · classic:** the earlier green field-jacket skin; saved IDs still work.
+
+Preview 4 bundles payload **12**. Source winding, facial detail and rig pivots are
+preserved; AUGUSTO has a body-parented pearl/gold cloak. See
+[quality-model notes and remaining limitations](docs/QUALITY-MODELS.md).
 
 Only the head/body/base meshes and cloned cosmetic materials are replaced.
 There are no intended changes to physics, colliders, controls, animation or networking.
@@ -42,7 +50,8 @@ only Ed25519-signed payloads from the configured HTTPS feed. Updates apply only
 while Discord is fully closed. This updates **three JavaScript payload files**,
 not the launcher/helper executable. Binary updates still require a new download.
 
-- [Public feed](wardrobe-update.json)
+- [Quality-model feed (Preview 4+)](wardrobe-quality-update.json)
+- [Legacy feed (Preview 3; unchanged)](wardrobe-update.json)
 - [Pinned public key and URL](launcher/update-policy.json)
 - [Verification code](launcher/signed_updates.py)
 - [Release verification](docs/VERIFY.md)
@@ -55,8 +64,9 @@ not the launcher/helper executable. Binary updates still require a new download.
   skin manager, showroom, preview renderer, asset preparation and tests.
 - [`hydro/build_model_v3.py`](hydro/build_model_v3.py) and
   [`hydro/build_nebula.py`](hydro/build_nebula.py): editable Blender generators.
-- [`launcher/bundle/`](launcher/bundle/): exact JS payloads supplied by Preview 3.
-- [`docs/RELEASE-PREVIEW-3.json`](docs/RELEASE-PREVIEW-3.json): executable/payload hashes.
+- [`launcher/bundle/`](launcher/bundle/): exact JS payloads supplied by Preview 4.
+- [`docs/RELEASE-PREVIEW-4.json`](docs/RELEASE-PREVIEW-4.json): executable/payload hashes.
+- [`docs/RELEASE-PREVIEW-3.json`](docs/RELEASE-PREVIEW-3.json): preserved earlier record.
 
 The distributed app's source is included. Private signing keys, Discord profiles,
 extracted game files, local debugging captures and unrelated recorder/assistant

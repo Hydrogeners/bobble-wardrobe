@@ -1,0 +1,37 @@
+{
+  "tag": "v0.1.0-preview.4",
+  "payloadRelease": 12,
+  "prerelease": true,
+  "executable": {
+    "name": "BobbleWardrobe-Preview.exe",
+    "sha256": "b0af3746e500b6af0302a06c3dd5addcc5108d3d82af5e9c010f6eafda24827d",
+    "bytes": 32684606,
+    "windowsCodeSigned": false
+  },
+  "payloadFiles": {
+    "main.cjs": {
+      "sha256": "0fe8df970a4c1503e349660b30d7eb6722c73a9d07b6c9ac65382ea3190f6296",
+      "bytes": 7948
+    },
+    "activity.js": {
+      "sha256": "b10959cadd029f24870306c5042f8667ea24f0b5c548c27b9d3c587190160f85",
+      "bytes": 1854
+    },
+    "wardrobe-live.js": {
+      "sha256": "07f13c1599dfb0148f01dc844b121e313761de3f3a7352a02b894933a5bfca87",
+      "bytes": 21035874
+    }
+  },
+  "signedFeed": {
+    "path": "wardrobe-quality-update.json",
+    "sha256": "7de8eb90682e5c00dfa860a60c78a8d16951522fff32e2045cdd6119319260fa",
+    "bytes": 37415164,
+    "publicKey": "1eb3ff8adcaf701c287109fb33b66ddccfb7d0d274c14dbc6b04f410215b1f86"
+  },
+  "legacyFeed": {
+    "path": "wardrobe-update.json",
+    "sha256": "242297bc4bf7439162f0a08f14c592c977dd8bef5342802aa4d6dadfeba1a770",
+    "unchanged": true
+  },
+  "validation": "Embedded payload/policy match source; signature, replay rejection and legacy-feed preservation passed. Native in-match and clean-machine validation incomplete."
+}

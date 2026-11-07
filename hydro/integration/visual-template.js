@@ -239,8 +239,10 @@
     pin(type,permHandles);
     for(const kind of ['head','body','base'])meshes[kind]=makeMesh(kind,D.parts[kind],type);
     palette=own(call('clone',call('white')),'HYDRO test palette texture');
-    if(!call('resize',palette,32,32,4,0))throw Error('Palette texture allocation failed');
-    const rgba=decode(D.palette);if(rgba.length!==4096)throw Error('Invalid palette length');
+    const size=D.textureSize===undefined?32:D.textureSize;
+    if(![32,128,192,256,512].includes(size))throw Error('Unsupported cosmetic texture size');
+    const rgba=decode(D.palette);if(rgba.length!==size*size*4)throw Error('Invalid palette length');
+    if(!call('resize',palette,size,size,4,0))throw Error('Palette texture allocation failed');
     nativeBuffer(rgba,p=>{if(!call('rawTexture',palette,p,rgba.length))throw Error('Palette upload failed');});call('apply',palette,0,0);
     phase='ready';window.addEventListener('keydown',key,true);
     window.__hydroModel=Object.freeze({status,arm,restore:fullRestore,tryApply:attach,inspect:()=>{const t=targetParts();return t?{root:t.label,body:t.body.meshName,head:t.head.meshName,base:t.base.meshName,material:t.body.materialName}:null;}});

@@ -10,8 +10,7 @@ from urllib.request import build_opener, HTTPRedirectHandler, Request
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from install_core import FILES, atomic, write_json
 
-MAX_ENVELOPE = 12 * 1024 * 1024
-MAX_FILE = 6 * 1024 * 1024
+from payload_limits import MAX_ENVELOPE, MAX_WARDROBE as MAX_FILE, file_limit
 
 def unique_pairs(pairs):
     result = {}
@@ -51,7 +50,7 @@ def verify(envelope: bytes, public_key: str, current: int) -> Release | None:
         entry = data['files'][name]
         if not isinstance(entry, dict) or set(entry) != {'sha256', 'content'}: raise ValueError('Invalid file entry')
         content = base64.b64decode(entry['content'], validate=True)
-        if not content or len(content) > MAX_FILE: raise ValueError('Invalid update file size')
+        if not content or len(content) > file_limit(name): raise ValueError('Invalid update file size')
         if hashlib.sha256(content).hexdigest() != entry['sha256']: raise ValueError('File digest mismatch')
         content.decode('utf-8')  # JS payloads only; refuse malformed text.
         files[name] = content

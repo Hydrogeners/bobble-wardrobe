@@ -20,7 +20,7 @@ jobs:
         working-directory: hydro/integration
         shell: pwsh
         run: |
-          node preview-test.cjs
+          node preview-test.cjs --quality
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node visual-test.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -28,7 +28,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node aim-accent-test.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m unittest -v test_visual_envelope.py test_nebula_rig.py
+          node compact-geometry-test.cjs --quality
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node fitted-bundle-test.cjs --quality
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:BOBBLE_ASSET_VARIANT='quality'
+          python -m unittest -v test_visual_envelope.py test_nebula_rig.py test_fitted_assets.py test_base_styles.py test_native_scale.py
       - name: Build and isolated helper lifecycle
         working-directory: launcher
         shell: pwsh

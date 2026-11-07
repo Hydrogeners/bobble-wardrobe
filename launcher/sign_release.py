@@ -9,13 +9,14 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from install_core import FILES, atomic
 from signed_updates import MAX_FILE, MAX_ENVELOPE, verify
+from payload_limits import file_limit
 
 def sign(bundle: Path,number: int,key: Ed25519PrivateKey):
     if type(number) is not int or number<1:raise ValueError('Use a positive monotonic release counter')
     files={}
     for name in FILES:
         content=(bundle/name).read_bytes()
-        if not content or len(content)>MAX_FILE:raise ValueError('Release file exceeds allowed size')
+        if not content or len(content)>file_limit(name):raise ValueError('Release file exceeds allowed size')
         content.decode('utf-8')
         files[name]={'sha256':hashlib.sha256(content).hexdigest(),'content':base64.b64encode(content).decode('ascii')}
     document=json.dumps({'schema':1,'product':'bobble-wardrobe','release':number,'files':files},sort_keys=True,separators=(',',':')).encode()

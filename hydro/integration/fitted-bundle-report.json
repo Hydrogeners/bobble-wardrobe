@@ -1,0 +1,8 @@
+{
+  "variant": "quality",
+  "assetBytes": 29817984,
+  "bundledBytes": 21034932,
+  "decodedSHA256": "3fd89293ce0824def60a36d51c22e4623a60c58203deb0d6c418bc73dafcd6bd",
+  "skins": 10,
+  "compression": "gzip; fflate 0.8.3, MIT; quality geometry byte planes"
+}

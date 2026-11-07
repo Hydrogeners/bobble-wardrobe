@@ -193,7 +193,8 @@ class Installer:
         self._assert_bootstrap(state)
         if type(release) is not int or release<=state.get('release',1):return state
         contents={name:(bundle/name).read_bytes() for name in FILES}
-        if any(not content or len(content)>6*1024*1024 for content in contents.values()):raise RuntimeError('Invalid update file size')
+        from payload_limits import file_limit
+        if any(not content or len(content)>file_limit(name) for name,content in contents.items()):raise RuntimeError('Invalid update file size')
         journal={'old':state,'oldFiles':{name:base64.b64encode((self.owned/name).read_bytes()).decode() for name in FILES},'newFiles':{name:digest(value) for name,value in contents.items()}}
         write_json(self.owned/'update.json',journal)
         try:

@@ -29,4 +29,13 @@ const canvas2={style:{},width:0,height:0,getContext:t=>t==='2d'?ctx2d:null,getBo
 const view2=w.__createBobblePreview(canvas2,e=>errors2.push(e));view2.setData(nebula);view2.visible(true);frames.get(1)();frames.delete(1);
 assert.equal(view2.info().meshes,3);assert.equal(view2.info().triangles,nebula.parts.head.triangles+nebula.parts.body.triangles+nebula.parts.base.triangles);
 assert.equal(errors2.length,0);view2.dispose();assert.equal(events2.size,0);assert.equal(frames.size,0);
-console.log('Preview regression checks passed: real rig, supersampling, wheel opt-in, bounded drag/zoom, closed-drag reset, cleanup, Nebula payload');
+for(const name of 'hydro miko todo jjcho augusto flair supa duolingo spark'.split(' ')){
+ const suffix=process.argv.includes('--quality')?'quality':'fitted';
+ const payload=JSON.parse(fs.readFileSync(__dirname+'/visual-'+name+'-'+suffix+'.json','utf8')),errors=[];
+ const cv={...canvas,style:{},addEventListener(){},removeEventListener(){}};
+ const v=w.__createBobblePreview(cv,e=>errors.push(e));v.setData(payload);v.visible(true);frames.get(1)();frames.delete(1);
+ assert.equal(v.info().meshes,3,name);assert.equal(v.info().triangles,Object.values(payload.parts).reduce((sum,p)=>sum+p.indices/3,0));assert.equal(errors.length,0,name);v.dispose();
+}
+assert.equal(w.__bobbleTextureSize({}),32);assert.equal(w.__bobbleTextureSize({textureSize:256}),256);
+assert.throws(()=>w.__bobbleTextureSize({textureSize:1024}),/Unsupported/);
+console.log('Preview regression checks passed: real rig, buffer bounds, controls, cleanup, classic Nebula and all nine fitted textured payloads');

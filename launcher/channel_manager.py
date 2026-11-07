@@ -93,7 +93,8 @@ class ChannelManager:
         if type(release) is not int or release<1:raise RuntimeError('Invalid release counter')
         content={name:(source/name).read_bytes() for name in FILES}
         hashes={name:digest(data) for name,data in content.items()}
-        if any(not data or len(data)>6*1024*1024 for data in content.values()):raise RuntimeError('Invalid payload size')
+        from payload_limits import file_limit
+        if any(not data or len(data)>file_limit(name) for name,data in content.items()):raise RuntimeError('Invalid payload size')
         key=str(release)
         previous=state['snapshots'].get(key)
         if previous and previous!=hashes:raise RuntimeError('Release counter reused for different payloads')
