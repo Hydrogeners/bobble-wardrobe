@@ -33,6 +33,16 @@ it offline. `sign_windows_release.py` uses the maintainer's external DPAPI-prote
 key. `publish_preview.py` uploads the portable prerelease binary; it does not publish
 private keys. Signing and publishing are not build prerequisites.
 
+`launcher_updates.py` separately verifies a bounded Ed25519 descriptor for product
+`bobble-wardrobe-launcher`. Only this repository's immutable GitHub release-asset
+URLs are accepted. Binary redirects are HTTPS-only and restricted to GitHub's
+asset hosts. Exact length, MZ header and signed SHA-256 must match before staging
+and again before process handoff. A signed cache records the highest downloaded
+release; older descriptors and same-counter content changes are rejected. Files
+under `%LOCALAPPDATA%/BobbleWardrobe/launcher-updates` are retained, not overwritten
+if modified. The original portable launcher stays a bootstrap. This is not a
+Windows Authenticode signature or an unattended resident-helper replacement.
+
 The public feed can change, but accepted changes must verify under the public key
 pinned in the executable and have an increasing release number. The helper does
 not rewrite itself. Uninstall first disables maintenance and leaves a durable opt-out.

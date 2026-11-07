@@ -41,7 +41,10 @@
     const saved=JSON.parse(localStorage.getItem(storageKey)||'null');
     if(saved?.version===1){
       remember=true;
-      for(const club of clubs)if(saved.assignments?.[club]==='original'||registry.has(saved.assignments?.[club]))assignments[club]=saved.assignments[club];
+      for(const club of clubs){
+        if(saved.assignments?.[club]==='original'||registry.has(saved.assignments?.[club]))assignments[club]=saved.assignments[club];
+        else if(saved.assignments?.[club]==='nebula')storageWarning='The retired skin was removed. Its clubs now use Original; your other assignments are unchanged.';
+      }
     }
   }catch(e){storageWarning='Saved preferences were unavailable; using defaults.';}
   function scan(){

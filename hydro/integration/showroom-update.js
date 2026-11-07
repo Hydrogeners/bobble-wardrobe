@@ -62,7 +62,10 @@ window.__bobbleClubCatalog=Object.freeze({
     const saved=JSON.parse(localStorage.getItem(storageKey)||'null');
     if(saved?.version===1){
       remember=true;
-      for(const club of clubs)if(saved.assignments?.[club]==='original'||registry.has(saved.assignments?.[club]))assignments[club]=saved.assignments[club];
+      for(const club of clubs){
+        if(saved.assignments?.[club]==='original'||registry.has(saved.assignments?.[club]))assignments[club]=saved.assignments[club];
+        else if(saved.assignments?.[club]==='nebula')storageWarning='The retired skin was removed. Its clubs now use Original; your other assignments are unchanged.';
+      }
     }
   }catch(e){storageWarning='Saved preferences were unavailable; using defaults.';}
   function scan(){
@@ -462,13 +465,13 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
   const div=document.createElement('div');div.innerHTML=`
     <button class="launcher" type="button" aria-controls="wardrobe-panel" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4 3 7l3 5 2-1v9h8v-9l2 1 3-5-5-3c0 4-8 4-8 0Z"/></svg>Wardrobe<span class="dot" aria-hidden="true"></span></button>
     <section id="wardrobe-panel" aria-labelledby="wardrobe-title" hidden>
-      <header><div class="title"><h2 id="wardrobe-title">Wardrobe</h2><p>Your bobble. Your style.</p></div><div class="toggle-wrap"><span class="toggle-label">Custom skins</span><button class="switch" role="switch" aria-label="Enable custom skins" aria-checked="false" type="button"></button></div><button class="close" type="button" aria-label="Close wardrobe"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></header>
+      <header><div class="title"><h2 id="wardrobe-title">Wardrobe</h2><p>Nine styles. Visible only to you.</p></div><div class="toggle-wrap"><span class="toggle-label">Custom skins</span><button class="switch" role="switch" aria-label="Enable custom skins" aria-checked="false" type="button"></button></div><button class="close" type="button" aria-label="Close wardrobe"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></header>
       <div class="content">
         <div class="collection"><div class="stage"><button class="arrow" id="previous" type="button" aria-label="Previous skin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button><canvas tabindex="0" aria-label="3D skin preview. Drag to rotate, scroll to zoom. J and L rotate; Home resets. Left and right arrows browse skins."></canvas><button class="arrow" id="next" type="button" aria-label="Next skin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button><p class="preview-error" role="status" hidden></p></div>
           <div class="view-tools"><button id="rotate-left" type="button" aria-label="Rotate model left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a7 7 0 1 1-1 8M6 3v5H1"/></svg></button><span>Drag to rotate</span><button id="rotate-right" type="button" aria-label="Rotate model right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a7 7 0 1 0 1 8M18 3v5h5"/></svg></button><button id="reset-view" type="button" aria-label="Reset model view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-7 8 7M7 8v12h10V8M10 20v-7h4v7"/></svg></button></div>
           <div class="skin-title"><h3 id="skin-name"></h3><span class="index" id="skin-index"></span></div><p class="description" id="skin-description"></p>
         </div>
-        <div class="assignment"><h3>Make it yours</h3><label class="field-label" for="club">Choose a club</label><select id="club"></select><p class="assigned" id="assigned"></p><button class="primary" id="apply" type="button">Use this skin</button><button class="secondary" id="original" type="button">Use original appearance</button><button class="link" id="apply-all" type="button">Use this skin for all clubs</button><hr class="divider"><label class="remember"><input id="remember" type="checkbox">Remember assignments on this device</label><p class="fine">Local visuals only. Reload removes the mod.</p><div class="notice" id="notice" role="alert" hidden></div><button class="link" id="retry" type="button" hidden>Retry compatible bobbles</button></div>
+         <div class="assignment"><h3>Make it yours</h3><label class="field-label" for="skin-picker">Choose a skin</label><select id="skin-picker"></select><label class="field-label club-label" for="club">Apply to a club</label><select id="club"></select><p class="assigned" id="assigned"></p><button class="primary" id="apply" type="button">Use this skin</button><button class="secondary" id="original" type="button">Use original appearance</button><button class="link" id="apply-all" type="button">Use this skin for all clubs</button><hr class="divider"><label class="remember"><input id="remember" type="checkbox">Remember assignments on this device</label><p class="fine">Skins start off when the activity reloads. Saved club choices stay on this device.</p><div class="notice" id="notice" role="alert" hidden></div><button class="link" id="retry" type="button" hidden>Retry compatible bobbles</button></div>
       </div><footer><p class="status" role="status" aria-live="polite"></p><p class="hints"><kbd>← →</kbd> browse · <kbd>Esc</kbd> close</p><div class="foot-actions"><button class="restore" id="restore" type="button">Restore all</button><button id="reset" type="button">Reset clubs</button></div></footer>
     </section>`;root.append(div);document.documentElement.append(host);
   const $=s=>root.querySelector(s),panel=$('section'),club=$('#club');
@@ -484,15 +487,16 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
   // Pop-out/reparenting can otherwise amplify a percentage/intrinsic-size cycle.
   accentStyle.textContent+=`.collection{align-self:start;min-height:0}.stage{flex:none;height:clamp(225px,34dvh,280px);grid-template-rows:minmax(0,1fr)}.preview-viewport{position:relative;height:100%;min-width:0;min-height:0;overflow:hidden;contain:strict}.preview-viewport canvas{position:absolute;inset:0;width:100%;height:100%;min-height:0;max-height:100%}`;
   const previewCanvas=$('canvas'),viewport=document.createElement('div');viewport.className='preview-viewport';previewCanvas.before(viewport);viewport.append(previewCanvas);
-  const lab=document.createElement('div');lab.className='accent-lab';lab.innerHTML=`
+   const lab=document.createElement('details');lab.className='accent-lab';lab.innerHTML=`<summary>Preview colors <span>Optional · preview only</span></summary>
     <div class="accent-heading"><h4>Accent Lab</h4><span>Halo + aim trail</span></div>
     <div class="accent-colors"><div class="accent-color"><input type="color" id="halo-color" aria-labelledby="halo-label"><div><label id="halo-label" for="halo-color">Selection halo</label><output id="halo-hex" for="halo-color"></output></div></div><div class="accent-color"><input type="color" id="aim-color" aria-labelledby="aim-label"><div><label id="aim-label" for="aim-color">Aiming arrow</label><output id="aim-hex" for="aim-color"></output></div></div></div>
     <div class="accent-presets" role="group" aria-label="Accent color presets"><button type="button" data-preset="hydro"><i style="--sample:#19b9ce" aria-hidden="true"></i>Hydro</button><button type="button" data-preset="aurora"><i style="--sample:#9865d9" aria-hidden="true"></i>Aurora</button><button type="button" data-preset="ember"><i style="--sample:#db6835" aria-hidden="true"></i>Ember</button><button type="button" data-preset="ice"><i style="--sample:#629ec7" aria-hidden="true"></i>Ice</button></div>
     <div class="accent-actions"><button type="button" id="apply-accents">Apply accents</button><button class="link" type="button" id="reset-accents">Reset colors</button></div>
-    <p class="accent-message" id="accent-state" role="status" aria-live="polite"></p><p class="accent-message">Halo: 3D preview only for now. Arrow: local Hydro patch; in-game color not yet verified. Session-only colors.</p>`;
+     <p class="accent-message" id="accent-state" role="status" aria-live="polite"></p><p class="accent-message">Colors affect this preview only. In-game halo and arrow recoloring is unsupported.</p>`;
   $('.collection').append(lab);
   $('#halo-label').textContent='Selection halo · preview only';
-  const defaults=window.__bobbleAccentDefaults||{halo:'#19b9ce',arrow:'#f0aa42'};
+   const defaults=window.__bobbleAccentDefaults||{halo:'#19b9ce',arrow:'#f0aa42'};
+   accentStyle.textContent+=`.club-label{margin-top:18px}.accent-lab summary{cursor:pointer;font-size:13px;font-weight:600;min-height:36px;padding:8px 0}.accent-lab summary span{font-size:11px;font-weight:400;color:#526048;margin-left:8px}.accent-lab[open] summary{margin-bottom:12px}.accent-heading{display:none}.collection{align-self:stretch}.stage{height:clamp(260px,42dvh,360px)}.remember{font-size:12px;line-height:1.5}.remember input{width:16px;height:16px}.view-tools button{min-height:36px;min-width:36px}.close{min-height:40px;min-width:40px}@media(max-width:620px){.stage{height:290px}.collection{padding-bottom:12px}}`;
   let accentDraft={...(window.__bobbleAccentSettings||defaults)};
   function syncAccents(){
     for(const [key,id]of [['halo','halo'],['arrow','aim']]){$('#'+id+'-color').value=accentDraft[key];$('#'+id+'-hex').textContent=accentDraft[key].toUpperCase();}
@@ -501,7 +505,8 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
     $('#apply-accents').disabled=!dirty;$('#accent-state').textContent=dirty?'Previewing changes · not applied':'Current session colors';
   }
   let open=false,index=0,lastFocus=null,viewer=null,previewID='',state=engine.state(),disposed=false,lastStatus='';
-  for(const key of engine.clubs){const o=document.createElement('option');o.value=key;o.textContent=catalog[key]?.name||key;club.append(o);}
+   for(const key of engine.clubs){const o=document.createElement('option');o.value=key;o.textContent=catalog[key]?.name||key;club.append(o);}
+   for(const skin of state.catalog){const o=document.createElement('option');o.value=skin.id;o.textContent=skin.name;$('#skin-picker').append(o);}
   for(const [key,c]of Object.entries(catalog))if(c.supported===false){const o=document.createElement('option');o.value=key;o.textContent=c.name+' · unsupported';o.disabled=true;club.append(o);}
   club.value=engine.clubs.find(c=>state.assignments[c]!=='original')||engine.clubs[0];
   function previewError(message){$('.preview-error').hidden=!message;$('.preview-error').textContent=message;}
@@ -522,7 +527,8 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
     if(previous&&s.catalog.some(x=>x.id===previous))index=s.catalog.findIndex(x=>x.id===previous);
     const skin=selected(),current=s.assignments[club.value],currentSkin=s.catalog.find(x=>x.id===current);
     $('#skin-name').textContent=skin?.name||'No skins installed';$('#skin-description').textContent=skin?.description||'Register a prepared skin to begin.';
-    $('#skin-index').textContent=s.catalog.length?String(index+1).padStart(2,'0')+' / '+String(s.catalog.length).padStart(2,'0'):'00 / 00';
+     $('#skin-index').textContent=s.catalog.length?String(index+1).padStart(2,'0')+' / '+String(s.catalog.length).padStart(2,'0'):'00 / 00';
+     $('#skin-picker').value=skin?.id||'';$('#skin-picker').disabled=!skin;
     for(const id of ['#previous','#next']){$(id).disabled=s.catalog.length<2;$(id).title=s.catalog.length<2?'One skin installed. More skins will appear here when added.':'';}
     $('.switch').setAttribute('aria-checked',String(s.enabled));$('.dot').classList.toggle('on',s.enabled);$('#remember').checked=s.remember;
     $('#auto-team').checked=!!s.autoSkin;$('#auto-team').disabled=typeof engine.auto!=='function'||!skin;$('#auto-team-note').textContent=s.autoSkin?(s.autoClub?'Auto team: '+(catalog[s.autoClub]?.name||s.autoClub)+' · '+s.autoSkin:'Waiting to identify your supported club'):'Uses the displayed skin for your team; manual club choices remain unchanged.';
@@ -535,7 +541,8 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
     const notices=[s.error,s.storageWarning,...s.failures].filter(Boolean);$('#notice').hidden=!notices.length;$('#notice').textContent=notices.join('\n');$('#retry').hidden=!s.failures.length&&!s.error;
     $('#restore').disabled=!s.enabled&&!s.attached&&!s.error;loadPreview();
   }
-  function browse(delta){if(state.catalog.length<2)return;index=(index+delta+state.catalog.length)%state.catalog.length;previewID='';update(state);}
+   function browse(delta){if(state.catalog.length<2)return;index=(index+delta+state.catalog.length)%state.catalog.length;previewID='';update(state);}
+   $('#skin-picker').addEventListener('change',e=>{index=state.catalog.findIndex(s=>s.id===e.target.value);previewID='';update(state);});
   function show(value=true){if(disposed||open===value)return;open=value;panel.hidden=!value;$('.launcher').setAttribute('aria-expanded',String(value));if(value){lastFocus=document.activeElement;loadPreview();viewer?.visible(true);$('canvas').focus();}else{viewer?.visible(false);if(lastFocus?.isConnected)lastFocus.focus();else $('.launcher').focus();}}
   $('.launcher').addEventListener('click',()=>show(!open));$('.close').addEventListener('click',()=>show(false));$('#previous').addEventListener('click',()=>browse(-1));$('#next').addEventListener('click',()=>browse(1));
   $('#rotate-left').addEventListener('click',()=>viewer?.rotate(-.3));$('#rotate-right').addEventListener('click',()=>viewer?.rotate(.3));$('#reset-view').addEventListener('click',()=>viewer?.reset());club.addEventListener('change',()=>update(engine.state()));

@@ -6,7 +6,7 @@ from pathlib import Path
 import argparse, base64,json,hashlib,struct
 import numpy as np
 from base_styles import make_base, augusto_cloak_panels, STYLES
-from native_scale import fit_native_parts
+from native_scale import fit_native_parts,finish_augusto_armor
 
 ROOT=Path(__file__).parent
 parser=argparse.ArgumentParser(description=__doc__)
@@ -144,6 +144,9 @@ if args.quality:
     result['qualityGeometry']=True
     result['baseStyle']=STYLES[args.glb.stem.split('-')[0]][0]
     result['nativeScale']=fit_native_parts(parts)
+    if args.glb.stem.split('-')[0]=='augusto':finish_augusto_armor(parts['body'])
+    from polish_atlas import clean_source_atlas
+    result=clean_source_atlas(result)
 args.out.write_text(json.dumps(result,separators=(',',':')))
 args.live.write_text((ROOT/'visual-template.js').read_text(encoding='utf-8').replace('__VISUAL_DATA__',json.dumps(result,separators=(',',':'))),encoding='utf-8')
 print(json.dumps({'parts':{k:{x:v[x] for x in ['vertices','indices','bounds']}for k,v in parts.items()},'fullGeometry':True,'originalGameGeometryIncluded':False},indent=2))

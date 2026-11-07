@@ -7,18 +7,23 @@ the rolling sphere. Clothes and accessories remain body-parented.
 import numpy as np
 
 STYLES={
-    'hydro':('tailored-brown',(103,51,28)),
+    'hydro':('tailored-brown',(116,57,29)),
     'miko':('teal-double-gold-band',(0,165,150)),
-    'todo':('midnight-satin',(33,32,49)),
-    'jjcho':('navy-tailored',(31,30,48)),
+    'todo':('midnight-satin',(39,38,56)),
+    'jjcho':('navy-tailored',(37,35,54)),
     'augusto':('pearl-pointed-folds',(224,224,218)),
-    'flair':('pearl-feather-tones',(230,232,227)),
+    'flair':('pearl-feather-tones',(245,246,239)),
     'supa':('purple-dark-wings',(91,59,132)),
     'duolingo':('snow-orange-wings',(232,235,232)),
     'spark':('ivory-gold-lotus',(236,234,222)),
 }
 
 def make_base(name,width=64,height=128):
+    """Supersample narrow gold/feather edges before storing the small strip."""
+    sample=_make_base(name,width*4,height*4)
+    return np.round(sample.astype(float).reshape(height,4,width,4,4).mean((1,3))).astype(np.uint8)
+
+def _make_base(name,width=64,height=128):
     style,color=STYLES[name]
     u=(np.arange(width)+.5)/width
     v=(np.arange(height)+.5)/height
@@ -41,15 +46,17 @@ def make_base(name,width=64,height=128):
         # x=.42 and .70 at the equator, continued around the entire sphere.
         d=np.abs(x-.58*z)
         gold=(smooth(.065,.075,d)-smooth(.18,.19,d))
-        paint(gold,(190,139,35))
+        paint(gold,(211,165,54))
         paint((smooth(.071,.078,d)-smooth(.088,.095,d))*.5,(242,201,89))
+        paint((smooth(.162,.169,d)-smooth(.179,.186,d))*.55,(137,94,25))
+        paint((smooth(.116,.123,d)-smooth(.135,.142,d))*.30,(250,223,144))
     elif name in ['hydro','todo','jjcho']:
         # Broad cloth panels reproduce the illustrated tonal lobes, not logos.
-        panels=.5+.5*np.cos(theta*3+.6*np.sin(latitude))
+        panels=.5+.5*np.cos(theta*3+.35*np.sin(latitude))
         if name in ['todo','jjcho']:
             # Dark navy still needs the reference's readable satin lobes;
             # a three-level near-black texture disappears at match scale.
-            result=np.array(color)[None,None,:]*(.65+1.05*panels[:,:,None])
+            result=np.array(color)[None,None,:]*(.82+.72*panels[:,:,None])
         else:result*=1-.20*panels[:,:,None]
         seam=np.exp(-((np.sin(theta*2+.2*np.sin(latitude)))/.035)**2)
         paint(seam,(np.array(color)*.80),.22)
@@ -68,7 +75,10 @@ def make_base(name,width=64,height=128):
         paint(facets,(184,193,195),.16)
     elif name in ['supa','duolingo']:
         # Side wings have inward-pointing tips, as on both source illustrations.
-        edge=.54+.17*np.cos((y+.4)*3.8)+.055*np.sin((y+.35)*12)
+        # One deliberate feather tip per side, not a wavy/scalloped blob.
+        edge=.64-.27*np.maximum(0,1-np.abs(y+.24)/.24)
+        if name=='supa':edge+=.8*smooth(.38,.70,-y)
+        else:edge-=.11*smooth(.1,.7,-y)
         wings=smooth(edge-.02,edge+.02,np.abs(x))
         paint(wings,(32,31,39) if name=='supa' else (234,119,16))
         border=np.exp(-((np.abs(x)-edge)/.016)**2)
@@ -84,6 +94,10 @@ def make_base(name,width=64,height=128):
         paint(vein,(239,217,167),.55)
         rim=np.exp(-((y-top)/.018)**2)
         paint(rim,(175,141,79),.50)
+        inner_top=-.93+.43*(.5+.5*np.cos(theta*10+np.pi))**2
+        inner=1-smooth(inner_top-.02,inner_top+.02,y)
+        paint(inner,(232,207,153),.68)
+        paint(np.exp(-((y-inner_top)/.017)**2),(170,137,75),.42)
     rgba=np.empty((height,width,4),dtype=np.uint8)
     rgba[:,:,:3]=np.clip(np.round(result),0,255).astype(np.uint8)
     rgba[:,:,3]=255
@@ -95,32 +109,63 @@ def augusto_cloak_panels():
     Unlike stretching the source cut caps, these panels have an intentional
     draped hem and a front opening that reveals the reference's white point.
     """
-    columns,rows=80,18
-    angles=np.linspace(.46,2*np.pi-.46,columns+1)
+    columns,rows=96,24
+    angles=np.linspace(.52,2*np.pi-.52,columns+1)
     p=[];uv=[];tri=[]
     for row in range(rows+1):
         t=row/rows
         for column,angle in enumerate(angles):
-            hem=.19+.035*np.cos(angle*3)
-            y=.86*(1-t)+hem*t
-            # Flared hem, not a second ball-shaped shell: reference cloak
-            # hangs past the widest point instead of narrowing into a globe.
-            radius=max(.31+.16*t,np.sqrt(max(0,.45**2-(y-.5)**2))+.012)
-            radius+=.002*np.sin(angle*13)*np.sin(np.pi*t)
+            hem=.19+.018*np.cos(angle*3)
+            y=1.14*(1-t)+hem*t
+            # A continuous shoulder-to-hem drape, never max(sphere, cone).
+            # The previous spherical envelope created a horizontal padded bulge.
+            radius=.29+.19*(1-(1-t)**3)
+            radius+=.007*np.sin(angle*11)*np.sin(np.pi*t)
             p.append((radius*np.sin(angle),y,radius*np.cos(angle)))
-            uv.append(((256.5+255*column/columns)/512,(448.5+63*(1-t))/512))
+            uv.append(((256.5+127*column/columns)/512,(448.5+63*(1-t))/512))
             if row<rows and column<columns:
                 a=row*(columns+1)+column;b=a+1;c=a+columns+1;d=c+1
+                tri.extend([(a,b,c),(b,d,c)])
+    # Body-anchored central breastplate and pearl shield point: these belong
+    # inside the opening, not painted onto the freely rotating ball.
+    armor_columns,armor_rows=20,32
+    offset=len(p)
+    for row in range(armor_rows+1):
+        t=row/armor_rows
+        y=1.14-.96*t
+        width=.125+.045*np.sin(np.pi*t)
+        if t>.68:width*=max(.025,(1-t)/.32)
+        for column in range(armor_columns+1):
+            across=column/armor_columns
+            x=(across*2-1)*width
+            z=max(.29,np.sqrt(max(0,.45**2-(y-.5)**2)))+.018
+            z=min(z,np.sqrt(max(0,.487**2-x*x)))
+            z+=.003*(1-(across*2-1)**2)
+            p.append((x,y,z))
+            uv.append(((384.5+127*across)/512,(448.5+63*(1-t))/512))
+            if row<armor_rows and column<armor_columns:
+                a=offset+row*(armor_columns+1)+column;b=a+1;c=a+armor_columns+1;d=c+1
                 tri.extend([(a,b,c),(b,d,c)])
     p=np.asarray(p);uv=np.asarray(uv);tri=np.asarray(tri,dtype=np.uint32)[:,[0,2,1]]
     face=np.cross(p[tri[:,1]]-p[tri[:,0]],p[tri[:,2]]-p[tri[:,0]])
     normal=np.zeros_like(p)
     for corner in range(3):np.add.at(normal,tri[:,corner],face)
     normal/=np.maximum(np.linalg.norm(normal,axis=1,keepdims=True),1e-12)
-    x=(np.arange(256)+.5)/256;y=(np.arange(64)+.5)/64
-    folds=(.5+.5*np.cos(x[None,:]*np.pi*18))*(.4+.6*(1-y[:,None]))
+    x=(np.arange(128)+.5)/128;y=(np.arange(64)+.5)/64
+    folds=(.5+.5*np.cos(x[None,:]*np.pi*14))*(.35+.65*(1-y[:,None]))
     cloth=np.empty((64,256,4),dtype=np.uint8)
-    cloth[:,:,:3]=np.clip(np.array([218,218,214])[None,None,:]-folds[:,:,None]*10,0,255)
-    cloth[:,:3,:3]=(195,157,68);cloth[:,-3:,:3]=(195,157,68)
+    cloth[:,:128,:3]=np.clip(np.array([241,239,232])[None,None,:]-folds[:,:,None]*20,0,255)
+    cloth[:,:2,:3]=(197,152,48);cloth[:,126:128,:3]=(197,152,48)
+    cloth[:,2:3,:3]=(245,216,130);cloth[:,125:126,:3]=(245,216,130)
+    tone=.87+.13*np.cos((x-.35)*np.pi)
+    armor=np.broadcast_to(np.array([237,189,57])[None,None,:]*tone[None,:,None],(64,128,3)).copy()
+    # The image rows run bottom-to-top; t=1-y matches the geometry.
+    white=(y[:,None]<.32)
+    pearl=np.broadcast_to(np.array([244,243,235])[None,None,:]*(.87+.13*np.cos(x*np.pi))[None,:,None],(64,128,3))
+    armor=np.where(white[:,:,None],pearl,armor)
+    highlight=(np.abs(x[None,:]-(.31+.23*y[:,None]))<.022)&~white
+    armor[highlight]=[255,242,190]
+    armor[:,0:2]=[164,119,31];armor[:,-2:]=[164,119,31]
+    cloth[:,128:,:3]=np.clip(armor,0,255)
     cloth[:,:,3]=255
     return p,normal,uv,tri,cloth

@@ -11,6 +11,7 @@ const factory=fs.readFileSync(path.join(root,'visual-factory.js'),'utf8');
 const manager=fs.readFileSync(path.join(root,'skin-manager.js'),'utf8');
 function boot(options={}){
   const s=setup(options),store=new Map();
+  if(options.saved)store.set('bobble-wardrobe.preferences.v1',JSON.stringify(options.saved));
   s.ctx.localStorage={getItem:k=>store.get(k)||null,setItem:(k,v)=>{if(options.storageFail)throw Error('blocked');store.set(k,v);},removeItem:k=>store.delete(k)};
   s.ctx.console=console;s.window.__bobbleSkinAssets=options.assets||{hydro:data};s.window.__bobbleSkinCatalog=options.catalog;
   const originalCall=s.window.__hydroNativeProbe.call;
@@ -60,6 +61,13 @@ test('preferences opt-in; disabled on load; unknown entries rejected',()=>{
   const s=boot();s.engine.assign('Bull','hydro');assert.equal(s.store.size,0);s.engine.remember(true);assert.equal(s.store.size,1);
   assert.throws(()=>s.engine.assign('Alien','hydro'),/Unknown/);assert.throws(()=>s.engine.assign('Bear','missing'),/Unknown/);
   s.engine.remember(false);assert.equal(s.store.size,0);s.engine.dispose();
+});
+test('retired assignment falls back to Original without losing supported choices',()=>{
+  const s=boot({saved:{version:1,assignments:{Bull:'nebula',Bear:'hydro'}}});
+  assert.equal(s.engine.state().assignments.Bull,'original');
+  assert.equal(s.engine.state().assignments.Bear,'hydro');
+  assert.equal(s.engine.state().enabled,false);assert.equal(s.engine.state().remember,true);
+  assert.match(s.engine.state().storageWarning,/retired skin/);s.engine.dispose();
 });
 test('storage failure does not block native restoration',()=>{
   const s=boot({storageFail:true});s.engine.remember(true);assert.match(s.engine.state().storageWarning,/could not/);

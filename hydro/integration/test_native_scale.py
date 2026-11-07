@@ -21,13 +21,21 @@ class NativeScaleTests(unittest.TestCase):
                 after=json.loads((ROOT/f'visual-{name}-quality.json').read_text())
                 expected=copy.deepcopy(before['parts'])
                 metadata=fit_native_parts(expected)
-                self.assertEqual(after['parts'],expected)
-                self.assertEqual(after['nativeScale'],metadata)
-                self.assertEqual(after['palette'],before['palette'])
+                for kind in ['head','base']:
+                    self.assertTrue(after['parts'][kind]==expected[kind],kind+' native transform changed')
+                    self.assertEqual(after['nativeScale']['parts'][kind],metadata['parts'][kind])
+                if name!='augusto':
+                    self.assertTrue(after['parts']['body']==expected['body'],'Native torso transform changed')
+                    self.assertEqual(after['nativeScale'],metadata)
+                # Outfit/base artwork and AUGUSTO's added panels are now
+                # deliberately revised; head texels and original body topology
+                # are checked independently by test_base_styles.
                 for kind,part in after['parts'].items():
                     old=before['parts'][kind]
                     for key in ['uv','index','vertices','indices','sourceNodes']:
-                        self.assertEqual(part[key],old[key])
+                        if name=='augusto' and kind=='body':
+                            if key=='sourceNodes':self.assertEqual(part[key],old[key])
+                        else:self.assertTrue(part[key]==old[key],kind+' '+key)
                     self.assertLess(np.abs(np.linalg.norm(read(part,'normal'),axis=1)-1).max(),1e-4)
                 ball=read(after['parts']['base'],'position')
                 np.testing.assert_allclose(np.linalg.norm(ball,axis=1),.5,atol=.0001)

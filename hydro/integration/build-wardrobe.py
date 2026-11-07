@@ -28,7 +28,6 @@ replace_once('return JSON.stringify(status());', 'return controller;')
 assert source.startswith('// TEMPORARY') and source.endswith('})();\n')
 body = source[source.index("  'use strict';"):source.rfind('})();')]
 factory = 'window.__bobbleCreateVisual = function(options) {\n' + body + '};\n'
-nebula = json.loads((ROOT / 'visual-nebula-data.json').read_text())
 catalog = [
     {'id': 'hydro', 'name': 'Hydro', 'description': 'Redesigned detective cap, glasses, lavender tie & brown cape'},
     {'id': 'miko', 'name': 'MIKO', 'description': 'Teal detective, brown fedora, gold monocle & tuxedo'},
@@ -39,11 +38,9 @@ catalog = [
     {'id': 'supa', 'name': 'SUPA', 'description': 'Red-and-white cap, blue jacket & yellow piping'},
     {'id': 'duolingo', 'name': 'DUOLINGO', 'description': 'Top hat, carrot nose, checked blue scarf & snowy coat'},
     {'id': 'spark', 'name': 'Spark', 'description': 'Green hair and cape, flower cap, planet pendant & gold-leaf base'},
-    {'id': 'nebula', 'name': 'Nebula · classic', 'description': 'Original green field jacket model; existing saved assignments preserved'},
 ]
 suffix='quality' if args.quality else 'fitted'
-models = {row['id']: json.loads((ROOT / ('visual-'+row['id']+'-'+suffix+'.json')).read_text()) for row in catalog if row['id'] != 'nebula'}
-models['nebula'] = nebula
+models = {row['id']: json.loads((ROOT / ('visual-'+row['id']+'-'+suffix+'.json')).read_text()) for row in catalog}
 raw = json.dumps(compact(models), separators=(',', ':')).encode()
 assert len(raw) <= 64*1024*1024, 'Decoded asset budget exceeded'
 compressed = base64.b64encode(gzip.compress(raw, compresslevel=9, mtime=0)).decode()

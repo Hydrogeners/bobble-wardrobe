@@ -6,6 +6,7 @@ import unittest
 import numpy as np
 from base_styles import STYLES,make_base,augusto_cloak_panels
 from native_scale import fit_native_parts
+from PIL import Image,ImageDraw,ImageFilter
 
 ROOT=Path(__file__).parent
 BACKUP=ROOT.parent/'assets'/'quality-payload-10-json'
@@ -45,8 +46,34 @@ class BaseStyleTests(unittest.TestCase):
                         self.assertEqual(original,base64.b64decode(after['parts']['body'][key])[:len(original)],'Extend the cloak without distorting the existing body')
                 a=np.frombuffer(base64.b64decode(before['palette']),np.uint8).reshape(512,512,4)
                 b=np.frombuffer(base64.b64decode(after['palette']),np.uint8).reshape(512,512,4)
-                np.testing.assert_array_equal(a[:448,:448],b[:448,:448])
+                if 'surfacePolish' in after:
+                    self.assertTrue(after['surfacePolish']['headSamplingTexelsUnchanged'])
+                    part=after['parts']['head']
+                    uv=np.frombuffer(base64.b64decode(part['uv']),'<f4').reshape(-1,2)*512-.5
+                    tri=np.frombuffer(base64.b64decode(part['index']),'<u2').reshape(-1,3)
+                    mask=Image.new('L',(512,512));draw=ImageDraw.Draw(mask)
+                    for ids in tri:draw.polygon([tuple(point) for point in uv[ids]],fill=255)
+                    protected=np.asarray(mask.filter(ImageFilter.MaxFilter(5)))>0
+                    protected[448:]=False;protected[:,448:]=False
+                    np.testing.assert_array_equal(a[protected],b[protected])
+                    changed=np.any(a[:448,:448]!=b[:448,:448],axis=2)
+                    self.assertEqual(int(changed.sum()),after['surfacePolish']['cleanedOutfitTexels'])
+                    self.assertLess(int(changed.sum()),1000,'Outfit cleanup must remain targeted')
+                else:np.testing.assert_array_equal(a[:448,:448],b[:448,:448])
                 np.testing.assert_array_equal(b[448:512,:256],make_base(name,256,64))
                 self.assertEqual(after['baseStyle'],STYLES[name][0])
+
+    def test_augusto_chest_panel_clears_the_rolling_ball(self):
+        data=json.loads((ROOT/'visual-augusto-quality.json').read_text())
+        part=data['parts']['body']
+        uv=np.frombuffer(base64.b64decode(part['uv']),'<f4').reshape(-1,2)
+        armor=(uv[:,0]>.75)&(uv[:,1]>.875)
+        self.assertGreater(armor.sum(),500)
+        p=np.frombuffer(base64.b64decode(part['position']),'<f4').reshape(-1,3)
+        self.assertGreater(np.linalg.norm(p[armor],axis=1).min(),.5169)
+        tri=np.frombuffer(base64.b64decode(part['index']),'<u2').reshape(-1,3)
+        faces=tri[np.all(armor[tri],axis=1)]
+        # Convex ball stays clear of faces as well as their vertices.
+        self.assertGreater(np.linalg.norm(p[faces].mean(axis=1),axis=1).min(),.515)
 
 if __name__=='__main__':unittest.main()

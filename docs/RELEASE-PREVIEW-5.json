@@ -1,0 +1,44 @@
+{
+  "tag": "v0.1.0-preview.5",
+  "payloadRelease": 13,
+  "prerelease": true,
+  "executable": {
+    "name": "BobbleWardrobe-Preview.exe",
+    "sha256": "e98416bfe9c08ccfdddafe76679ad60adc689c0bb830123f0271b01581b53e45",
+    "bytes": 32331233,
+    "windowsCodeSigned": false
+  },
+  "payloadFiles": {
+    "main.cjs": {
+      "sha256": "0fe8df970a4c1503e349660b30d7eb6722c73a9d07b6c9ac65382ea3190f6296",
+      "bytes": 7948
+    },
+    "activity.js": {
+      "sha256": "b10959cadd029f24870306c5042f8667ea24f0b5c548c27b9d3c587190160f85",
+      "bytes": 1854
+    },
+    "wardrobe-live.js": {
+      "sha256": "777e29ea6c72a7d6d1f85eaa46b84b9193854cfc81180bec13edab342d18ea1d",
+      "bytes": 20524263
+    }
+  },
+  "signedFeed": {
+    "path": "wardrobe-quality-update.json",
+    "sha256": "6c38973f46e5dd0a8312e046cf37c15727a75810d3aa6d90f5d1ee90863fe4be",
+    "bytes": 36505632,
+    "publicKey": "1eb3ff8adcaf701c287109fb33b66ddccfb7d0d274c14dbc6b04f410215b1f86"
+  },
+  "signedLauncherDescriptor": {
+    "path": "launcher-update.json",
+    "sha256": "01629dfc42a943a8052056a9920de99eaf746408662ad2149c9ef3f51a0330a7",
+    "bytes": 480,
+    "url": "https://github.com/Hydrogeners/bobble-wardrobe/releases/download/v0.1.0-preview.5/BobbleWardrobe-Preview.exe",
+    "release": 13
+  },
+  "legacyFeed": {
+    "path": "wardrobe-update.json",
+    "sha256": "242297bc4bf7439162f0a08f14c592c977dd8bef5342802aa4d6dadfeba1a770",
+    "unchanged": true
+  },
+  "validation": "Public-source full build and packaged helper lifecycle; signature/digest/source/embedded-policy agreement; previous-release automatic deferral, apply and byte-exact uninstall; launcher updater tamper/replay/offline/handoff tests; responsive UI fixture checks. Native motion, clean-machine and future Windows handoff coverage incomplete."
+}

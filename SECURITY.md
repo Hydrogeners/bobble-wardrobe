@@ -23,7 +23,10 @@ debugger users. Inspect `main.cjs` for the exact allowlist and recovery path.
 The update-enabled launcher/helper fetches the public URL in `launcher/update-policy.json`:
 GitHub's raw content host. GitHub receives ordinary connection metadata (such as
 IP address and user-agent). No Discord credentials or game state are attached.
-There is no analytics service or account system operated by this project.
+The desktop launcher also checks the pinned `launcher_updates.FEED` raw URL.
+Verified newer launchers download from this repository's GitHub release assets;
+HTTPS redirects are restricted to GitHub's allowlisted asset hosts. There is no
+analytics service or account system operated by this project.
 
 The user still has Discord's normal network connections; those are not controlled
 by this project. Maintainer publishing scripts use GitHub credentials through Git,
@@ -33,13 +36,16 @@ but are not packaged into the application.
 
 The bundled Ed25519 public key verifies the exact signed bytes before executable
 payload content is parsed/applied. HTTPS, size limits, file-name allowlists and
-digests are checked. Redirects, invalid signatures and older/equal release counters
+digests are checked. Payload redirects, invalid signatures and older/equal release counters
 are refused. Updates are not applied to a running Discord installation.
 
 The trusted files are `main.cjs`, `activity.js` and `wardrobe-live.js`. They are
 executable code, not just passive skins. A compromised signing key can authorize
 malicious updates. Local state is not tamper-proof against a same-user attacker.
-Windows code signing and binary self-update are not implemented.
+Windows code signing is not implemented. Preview 5 adds a separate signed binary
+descriptor and verified cached-launcher handoff; see `launcher_updates.py`. No
+unsigned GitHub latest-release response authorizes executable code. The resident
+helper is replaced only by explicit Install with Discord fully closed.
 
 The maintainer key is DPAPI encrypted outside the repository. DPAPI is not a
 defense against malware already running as that Windows user. The private key
@@ -52,6 +58,8 @@ Uninstall disables maintenance first, stops its helper through an owned event,
 removes owned startup registration, and restores tracked bridges. Later user/mod
 edits are retained as conflicts, not overwritten. Opt-out/recovery records can
 remain; optional activity localStorage preferences are not erased automatically.
+Portable launchers and inactive cached launcher copies also remain. They have no
+autostart registration and can be deleted manually after closing them.
 
 ## Reporting
 

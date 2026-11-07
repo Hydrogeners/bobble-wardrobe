@@ -59,3 +59,24 @@ def fit_native_parts(parts):
         local=read(part,'position')
         part['bounds']=[local.min(0).tolist(),local.max(0).tolist()]
     return {'revision':12,'reference':'Prod-590-CL28650 / Team 1 Bug human visual rest bounds, not colliders','parts':factors}
+
+def finish_augusto_armor(part):
+    """Keep the owned chest/white-point panel outside the independent ball.
+
+    Only the new parametric armor is adjusted/re-normalized. Never recalculate
+    normals or move vertices on the original disconnected source surface.
+    """
+    p=read(part,'position')+ORIGIN['body'];n=read(part,'normal')
+    uv=np.frombuffer(base64.b64decode(part['uv']),'<f4').reshape(-1,2)
+    armor=(uv[:,0]>.75)&(uv[:,1]>.875)
+    clearance=np.sqrt(np.maximum(0,.517**2-p[:,0]**2-(p[:,1]-.5)**2))
+    p[armor,2]=np.maximum(p[armor,2],clearance[armor])
+    tri=np.frombuffer(base64.b64decode(part['index']),'<u2').reshape(-1,3)
+    selected=tri[np.all(armor[tri],axis=1)]
+    face=np.cross(p[selected[:,1]]-p[selected[:,0]],p[selected[:,2]]-p[selected[:,0]])
+    summed=np.zeros_like(n)
+    for corner in range(3):np.add.at(summed,selected[:,corner],face)
+    summed/=np.maximum(np.linalg.norm(summed,axis=1,keepdims=True),1e-12)
+    n[armor]=summed[armor]
+    part['position']=encode(p-ORIGIN['body']);part['normal']=encode(n)
+    local=read(part,'position');part['bounds']=[local.min(0).tolist(),local.max(0).tolist()]

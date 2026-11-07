@@ -1,4 +1,4 @@
-param([string]$DistPath='release-preview-native-scale',[switch]$Quality=$true)
+param([string]$DistPath='release-preview-5',[switch]$Quality=$true)
 $ErrorActionPreference='Stop'
 Push-Location $PSScriptRoot
 try {
@@ -17,7 +17,7 @@ try {
     } finally { Pop-Location }
     python build_payload.py
     if($LASTEXITCODE -ne 0){throw 'Bundle build failed'}
-    python -m unittest -v test_install_core.py test_signed_updates.py test_maintenance.py test_channel_manager.py test_background.py test_sign_release.py test_windows_processes.py test_windows_signing.py
+    python -m unittest -v test_install_core.py test_signed_updates.py test_launcher_updates.py test_quality_migration.py test_maintenance.py test_channel_manager.py test_background.py test_sign_release.py test_windows_processes.py test_windows_signing.py
     if($LASTEXITCODE -ne 0){throw 'Installer tests failed'}
     node test_activity.cjs
     if($LASTEXITCODE -ne 0){throw 'Activity bootstrap tests failed'}
