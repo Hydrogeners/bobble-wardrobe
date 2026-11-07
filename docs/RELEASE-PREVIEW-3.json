@@ -1,0 +1,16 @@
+{
+  "tag": "v0.1.0-preview.3",
+  "payloadRelease": 8,
+  "executable": {
+    "name": "BobbleWardrobe-Preview.exe",
+    "bytes": 17337284,
+    "sha256": "59c1a0418c5cd89ddbc97b947c9696fdf7d85d0652bca946fffb9b02be31c265"
+  },
+  "files": {
+    "main.cjs": "0fe8df970a4c1503e349660b30d7eb6722c73a9d07b6c9ac65382ea3190f6296",
+    "activity.js": "b10959cadd029f24870306c5042f8667ea24f0b5c548c27b9d3c587190160f85",
+    "wardrobe-live.js": "f66150f2f8f7fee6a7d680fe28be5ed28c0ecbecd47f1fa13da6b3b355ddbed3"
+  },
+  "feedSHA256": "242297bc4bf7439162f0a08f14c592c977dd8bef5342802aa4d6dadfeba1a770",
+  "note": "Payload bytes match the published signed feed. Public-source build tooling was made portable after the EXE release; bit-for-bit executable reproducibility is not claimed."
+}

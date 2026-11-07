@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>Wardrobe showroom UI fixture</title>
+<style>body{margin:0;background:#222b24;color:#d1ddca;font:13px system-ui}p{max-width:30ch;padding:12px}</style>
+<p>UI test fixture. Real authored model; simulated club state. Not a game screenshot.</p>
+<script src="../club-catalog.js"></script><script src="../skin-accents.js"></script><script src="../skin-preview.js"></script>
+<script type="module">
+const [hydro,nebula]=await Promise.all([
+  fetch('../visual-repaired-data.json').then(r=>r.json()),
+  fetch('../visual-nebula-data.json').then(r=>r.json()),
+]);
+window.__bobbleSkinAssets={hydro,nebula};
+window.__bobbleSkinCatalog=[{id:'hydro',name:'Hydro',description:'Chestnut cap, glasses & tailored coat'},{id:'nebula',name:'Nebula',description:'Green field jacket, silver-panel cap & gold-leaf base'}];
+const clubs=['Bear','Tiger','Bull','Dino','Hawk','Pig','Bug'],listeners=new Set();
+let state={enabled:false,remember:false,assignments:Object.fromEntries(clubs.map(c=>[c,'original'])),counts:Object.fromEntries(clubs.map(c=>[c,0])),attached:0,failures:[],catalog:window.__bobbleSkinCatalog};
+const emit=()=>{for(const fn of listeners)fn(structuredClone(state));};
+window.__bobbleWardrobeEngine={clubs,state:()=>structuredClone(state),subscribe(fn){listeners.add(fn);fn(state);return()=>listeners.delete(fn)},previewData:id=>window.__bobbleSkinAssets[id]||hydro,assign(c,s){state.assignments[c]=s;emit()},assignAll(s){for(const c of clubs)state.assignments[c]=s;emit()},setEnabled(v){state.enabled=v;emit()},remember(v){state.remember=v;emit()},restore(){state.enabled=false;state.attached=0;emit();return true},reset(){state.enabled=false;for(const c of clubs)state.assignments[c]='original';emit()},retry(){state.failures=[];emit()},dispose(){return true}};
+window.__addFixtureSkin=()=>{state.catalog.push({id:'test-second-entry',name:'TEST: second entry',description:'Synthetic catalog entry for carousel tests only'});emit();};
+const script=document.createElement('script');script.src='../skin-showroom.js';script.onload=()=>window.__bobbleWardrobe.show();document.head.append(script);
+</script>

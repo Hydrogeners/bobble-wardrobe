@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>Preview pop-out resize regression</title>
+<iframe src="showroom-fixture.html" style="border:0;width:985px;height:719px"></iframe><pre id="result">Waiting</pre>
+<script>
+const frame=document.querySelector('iframe'),result=document.querySelector('#result');
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{try{
+  for(let i=0;i<60&&!frame.contentWindow.__bobbleWardrobe?.preview();i++)await wait(100);
+  const w=frame.contentWindow,r=w.document.querySelector('#bobble-wardrobe').shadowRoot,c=r.querySelector('canvas'),stage=r.querySelector('.stage');
+  for(let i=0;i<18;i++){
+    const [width,height]=[[1540,719],[375,719],[831,677],[320,180],[985,719],[640,480]][i%6];
+    frame.style.width=width+'px';frame.style.height=height+'px';
+    w.__bobbleWardrobe.hide();await wait(25);w.__bobbleWardrobe.show();await wait(150);
+    const before=stage.getBoundingClientRect().height;
+    // Simulate stale intrinsic dimensions carried across a window transition.
+    c.width=758;c.height=119814;w.__bobbleWardrobe.hide();w.__bobbleWardrobe.show();await wait(150);
+    const after=stage.getBoundingClientRect().height,b=c.getBoundingClientRect();
+    if(before<200||after>300||Math.abs(before-after)>1||b.height>300||c.width>2048||c.height>2048)throw Error(JSON.stringify({width,height,before,after,cssHeight:b.height,pixels:[c.width,c.height]}));
+  }
+  result.textContent='PASS: 18 viewport/close/reopen/stale-buffer cycles; stage <=280px, buffer <=2048px';
+}catch(e){result.textContent='FAIL: '+e.stack;}})();
+</script>

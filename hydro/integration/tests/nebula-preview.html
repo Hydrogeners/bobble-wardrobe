@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>Wardrobe skin preview</title>
+<style>
+  body{margin:0;background:#222b24;color:#d1ddca;font:13px system-ui;display:flex;gap:24px;padding:24px}
+  figure{margin:0;display:grid;gap:8px;justify-items:center}
+  canvas{display:block;width:420px;height:560px;border-radius:18px;background:#2a342d}
+  figcaption{font-weight:600;letter-spacing:.04em}
+</style>
+<figure><canvas id="hydro"></canvas><figcaption>Hydro</figcaption></figure>
+<figure><canvas id="nebula"></canvas><figcaption>Nebula</figcaption></figure>
+<script src="../preview-rig.js"></script>
+<script src="../skin-accents.js"></script>
+<script src="../skin-preview.js"></script>
+<script>
+(async()=>{
+  const [hydro,nebula]=await Promise.all([
+    fetch('../visual-repaired-data.json',{cache:'no-store'}).then(r=>r.json()),
+    fetch('../visual-nebula-data.json',{cache:'no-store'}).then(r=>r.json()),
+  ]);
+  const views={};
+  for(const [id,data] of [['hydro',hydro],['nebula',nebula]]){
+    const view=window.__createBobblePreview(document.getElementById(id),e=>console.error(id,e));
+    view.setData(data);view.visible(true);views[id]=view;
+  }
+  window.__views=views;
+  document.title='Hydro '+views.hydro.info().triangles+' | Nebula '+views.nebula.info().triangles;
+})();
+</script>
