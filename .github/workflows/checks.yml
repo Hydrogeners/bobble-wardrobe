@@ -22,7 +22,7 @@ jobs:
         run: |
           node preview-test.cjs --quality
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node visual-test.cjs
+          node visual-test.cjs --quality
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node wardrobe-test.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

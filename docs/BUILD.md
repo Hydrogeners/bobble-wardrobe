@@ -33,7 +33,7 @@ From `hydro/integration`:
 
 ```powershell
 node preview-test.cjs --quality
-node visual-test.cjs
+node visual-test.cjs --quality
 node wardrobe-test.cjs
 node aim-accent-test.cjs
 $env:BOBBLE_ASSET_VARIANT='quality'
