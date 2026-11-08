@@ -1,0 +1,14 @@
+{
+  "name": "bobble-recorder",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Recording-only Bobble League add-on",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node validation/video-recorder.test.cjs && node validation/video-storage.test.cjs && node validation/native-lifecycle.test.cjs && node validation/video-offline.test.cjs && node validation/distribution.test.cjs",
+    "build": "python tools/build_recorder.py",
+    "test:browser": "node validation/video-browser.test.cjs",
+    "test:media": "node validation/clip-host.test.cjs",
+    "media": "node tools/clip_host.cjs"
+  }
+}

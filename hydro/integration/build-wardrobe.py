@@ -56,12 +56,17 @@ assets = ('// BEGIN WARDROBE ASSETS\n(function(){const module={exports:{}};const
           + 'window.__bobbleSkinAssets=expandQualityGeometry(JSON.parse(module.exports.strFromU8(decoded)));})();\n'
           + 'window.__bobbleSkinCatalog = ' + json.dumps(catalog, separators=(',', ':')) + ';\n// END WARDROBE ASSETS\n')
 bundle = '\n'.join([
+    '// Power Tracker: independent manual activity mod, no game-memory access.\n/*\n'+(ROOT.parent.parent/'launcher/third_party/BLPT-LICENSE.txt').read_text(encoding='utf-8')+'\n*/\ntry {',
+    (ROOT / 'power-tracker-core.js').read_text(encoding='utf-8'),
+    (ROOT / 'power-tracker.js').read_text(encoding='utf-8'),
+    '} catch(error) { window.__bobblePowerTrackerError=String(error); }',
     '// Bobble wardrobe: session-local cosmetics. Build-specific; no gameplay writes.',
     '(function(){ if(window.__bobbleWardrobe){window.__bobbleWardrobe.show();return;}\n',
     (ROOT / 'native-probe.js').read_text(encoding='utf-8'),
     (ROOT / 'allocation-check.js').read_text(encoding='utf-8'),
     assets, factory,
     (ROOT / 'club-catalog.js').read_text(encoding='utf-8'),
+    (ROOT / 'skin-team.js').read_text(encoding='utf-8'),
     (ROOT / 'skin-manager.js').read_text(encoding='utf-8'),
     (ROOT / 'skin-accents.js').read_text(encoding='utf-8'),
     (ROOT / 'hydro-aim-accent.js').read_text(encoding='utf-8'),
@@ -84,7 +89,7 @@ upgrade = """(() => {
   window.__bobbleCreateVisual=saved.create;window.__bobbleSkinAssets=saved.assets;
 """
 upgrade += '\n'.join((ROOT / name).read_text(encoding='utf-8') for name in [
-    'club-catalog.js', 'skin-manager.js', 'skin-accents.js', 'hydro-aim-accent.js', 'preview-rig.js', 'skin-preview.js', 'skin-showroom.js'])
+    'club-catalog.js', 'skin-team.js', 'skin-manager.js', 'skin-accents.js', 'hydro-aim-accent.js', 'preview-rig.js', 'skin-preview.js', 'skin-showroom.js'])
 upgrade += """
   const engine=window.__bobbleWardrobeEngine;
   for(const club of engine.clubs)engine.assign(club,saved.state.assignments[club]||'original');

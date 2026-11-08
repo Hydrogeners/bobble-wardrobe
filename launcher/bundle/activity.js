@@ -1,4 +1,4 @@
-// Main-world Wardrobe bootstrap. No Node/Electron APIs are exposed to the page.
+// Shared main-world addon bootstrap. No Node/Electron APIs are exposed to the page.
 (() => {
   'use strict';
   if(location.origin!=='https://947957217959759964.discordsays.com')return;
@@ -24,7 +24,13 @@
       state.phase='unsupported-build';clearInterval(state.timer);state.timer=0;return;
     }
     clearInterval(state.timer);state.timer=0;
-    try{(0,eval)(payload);state.phase=window.__bobbleWardrobe?'installed':'failed';}
+    try{
+      (0,eval)(payload);
+      state.addons={wardrobe:!!window.__bobbleWardrobe,powerTracker:!!window.__bobblePowerTracker,recorder:!!window.__blReplay};
+      const ready=Object.values(state.addons).filter(Boolean).length;
+      state.phase=ready===3?'installed':ready?'partial':'failed';
+      state.error=[window.__bobbleWardrobeBootError,window.__bobblePowerTrackerError,window.__blReplayBootError].filter(Boolean).join(' | ');
+    }
     catch(e){state.phase='failed';state.error=String(e);}
   }
   state.timer=setInterval(tick,250);tick();

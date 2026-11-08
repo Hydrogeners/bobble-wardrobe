@@ -21,6 +21,13 @@ Build identifiers and function signatures document compatibility checks.
 
 ## Dependencies
 
+The manual in-activity Power Tracker interaction model is based on
+[organpy/BLPT](https://github.com/organpy/BLPT), by **organ**, reviewed at commit
+`d27522bdba74545fda47aaf9ca5ea21d10f59600`. Its full MIT copyright/license notice
+is in [`launcher/third_party/BLPT-LICENSE.txt`](launcher/third_party/BLPT-LICENSE.txt)
+and embedded in the runtime bundle. No upstream executables, game images or
+bundled fonts are redistributed; this is not an official BLPT release.
+
 Most dependencies are installed from their upstream distributions. Two JavaScript
 libraries are vendored under `hydro/integration/lib/` with their full license texts:
 

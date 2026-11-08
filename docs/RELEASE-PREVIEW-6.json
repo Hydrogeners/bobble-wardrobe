@@ -1,0 +1,44 @@
+{
+  "tag": "v0.1.0-preview.6",
+  "payloadRelease": 17,
+  "prerelease": true,
+  "executable": {
+    "name": "BobbleWardrobe-Preview.exe",
+    "sha256": "b81aa189bf86d0fb49743fd78ef2cb6f09f31b89e1a0cfbf798921d5e1ea648f",
+    "bytes": 32382956,
+    "windowsCodeSigned": false
+  },
+  "payloadFiles": {
+    "main.cjs": {
+      "sha256": "0fe8df970a4c1503e349660b30d7eb6722c73a9d07b6c9ac65382ea3190f6296",
+      "bytes": 7948
+    },
+    "activity.js": {
+      "sha256": "f12b1dbeab19b8ae34549cb5473444c585d67bc843c52069a3a9c8ccb6d16083",
+      "bytes": 2220
+    },
+    "wardrobe-live.js": {
+      "sha256": "6ba0590c7f6b39b418ff84fe4490ccb41f912e4c26b4359064284b725144d29f",
+      "bytes": 20647965
+    }
+  },
+  "signedFeed": {
+    "path": "wardrobe-quality-update.json",
+    "sha256": "95e45019e9460ada41e9e5ea7739113dbe6ee819bca2d8674e949d3bd6b90319",
+    "bytes": 36726196,
+    "publicKey": "1eb3ff8adcaf701c287109fb33b66ddccfb7d0d274c14dbc6b04f410215b1f86"
+  },
+  "signedLauncherDescriptor": {
+    "path": "launcher-update.json",
+    "sha256": "f0d7e89fbabdf7019bab89ba77a350445cf557787719ae72c16d703f656bc5b4",
+    "bytes": 480,
+    "url": "https://github.com/Hydrogeners/bobble-wardrobe/releases/download/v0.1.0-preview.6/BobbleWardrobe-Preview.exe",
+    "release": 17
+  },
+  "legacyFeed": {
+    "path": "wardrobe-update.json",
+    "sha256": "242297bc4bf7439162f0a08f14c592c977dd8bef5342802aa4d6dadfeba1a770",
+    "unchanged": true
+  },
+  "validation": "Clean public-source full three-addon build; geometry and synthetic native-team ownership; tracker/lifecycle; recorder recording/storage/lifecycle/offline; recorder provenance, exact composition and helper lifecycle; installer/signature/launcher updater; frozen repair/single-instance/full-uninstall tests passed. Combined actual-browser UI coexistence/focus/error-isolation tests use synthetic native bindings, not live-game proof. Real local Node helper startup/zero-handoff/stop smoke passed without uploads. Live native skin rendering, actual Discord OPFS availability, real-time one-hour Discord capture, real public-provider/Discord sharing and clean-machine compatibility remain unverified. Private assistance excluded."
+}

@@ -1,3 +1,226 @@
+// Power Tracker: independent manual activity mod, no game-memory access.
+/*
+MIT License
+
+Copyright (c) 2025 organ
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+*/
+try {
+// Manual BLPT-style tracking, reimplemented from organpy/BLPT (MIT, 2025 organ).
+// Pure state; no game, network, storage or DOM access.
+(() => {
+  'use strict';
+  const defaults=()=>({schema:1,players:Array.from({length:4},(_,i)=>({name:'Player '+(i+1),key:String(i+1)})),theme:'forest',position:null,size:null});
+  function shortcut(value){
+    if(typeof value!=='string'||value.length>50)throw Error('Use a short keyboard shortcut.');
+    if(!value.trim())return '';
+    const parts=value.split('+').map(p=>p.trim()),key=parts.pop();
+    const aliases={ctrl:'Ctrl',control:'Ctrl',alt:'Alt',shift:'Shift'};
+    const mods=parts.map(p=>aliases[p.toLowerCase()]);
+    if(mods.some(p=>!p)||new Set(mods).size!==mods.length)throw Error('Use Ctrl, Alt or Shift once per shortcut.');
+    let main=key.toUpperCase();
+    if(/^num(?:pad)?[0-9]$/i.test(key))main='Num'+key.slice(-1);
+    if(!/^(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Num[0-9])$/.test(main))throw Error('Choose a letter, number, F-key or Num0–9.');
+    const label=[...['Ctrl','Alt','Shift'].filter(p=>mods.includes(p)),main].join('+');
+    if(/^Ctrl\+[1-4]$/.test(label)||label==='Ctrl+Alt+Shift+H')throw Error('That shortcut is reserved for your other mods.');
+    if(['Alt+F4','Ctrl+F4','F1','F5'].includes(label))throw Error('Choose a shortcut that is not used by the app.');
+    return label;
+  }
+  function eventKey(event){
+    if(event.metaKey||event.isComposing)return '';
+    const key=/^Numpad[0-9]$/.test(event.code)?'Num'+event.code.slice(-1):event.key;
+    try{return shortcut([event.ctrlKey?'Ctrl':'',event.altKey?'Alt':'',event.shiftKey?'Shift':'',key].filter(Boolean).join('+'));}catch{return '';}
+  }
+  function validate(data){
+    if(!data||data.schema!==1||!Array.isArray(data.players)||data.players.length<1||data.players.length>10)throw Error('Use 1–10 players.');
+    const used=new Set();
+    const players=data.players.map(p=>{
+      if(!p||typeof p.name!=='string'||!p.name.trim()||p.name.trim().length>40||/[\x00-\x1f]/.test(p.name))throw Error('Give each player a name of 1–40 characters.');
+      const key=shortcut(p.key||'');
+      if(key&&used.has(key))throw Error('Each shortcut must be unique.');
+      if(key)used.add(key);
+      return {name:p.name.trim(),key};
+    });
+    if(!['forest','dark','bobble'].includes(data.theme))throw Error('Choose a supported theme.');
+    const pair=(value,keys)=>value===null||value===undefined?null:keys.every(k=>Number.isFinite(value[k])&&Math.abs(value[k])<=100000)?Object.fromEntries(keys.map(k=>[k,value[k]])):null;
+    return {schema:1,players,theme:data.theme,position:pair(data.position,['x','y']),size:pair(data.size,['width','height'])};
+  }
+  function create(data=defaults()){
+    let config=validate(data),marked=config.players.map(()=>false);
+    return Object.freeze({
+      state:()=>({config:JSON.parse(JSON.stringify(config)),marked:marked.slice()}),
+      toggle(index){if(!Number.isInteger(index)||index<0||index>=marked.length)throw Error('Unknown player.');marked[index]=!marked[index];},
+      clear(){marked.fill(false);},
+      configure(data){const next=validate(data);marked=next.players.map((p,i)=>config.players[i]?.name===p.name?marked[i]:false);config=next;},
+    });
+  }
+  window.BLPowerTrackerCore=Object.freeze({defaults,shortcut,eventKey,validate,create});
+})();
+
+/* THESIS: a match-side checklist small enough to forget until needed.
+ * OWN-WORLD: manager pearl/forest, Segoe UI, compact name rows and crate marks.
+ * STORY: open Powers, mark observed boxes, clear for a new match; settings tuck away.
+ * FIRST VIEWPORT: 216px draggable panel, four 28px rows, no dashboard chrome.
+ * FORM: isolated activity Shadow DOM; manual state only, no game or network access.
+ * BLPT interaction model: organpy/BLPT, MIT, copyright 2025 organ. */
+(() => {
+  'use strict';
+  if(window.__bobblePowerTracker)return;
+  const Core=window.BLPowerTrackerCore;if(!Core)throw Error('Power Tracker state unavailable');
+  const storageKey='bobble-addons.power-tracker.v1';let warning='',initial=Core.defaults(),invalidRaw=null;
+  try{const raw=localStorage.getItem(storageKey);if(raw){if(raw.length>16384)throw Error('Saved settings are too large');initial=Core.validate(JSON.parse(raw));}}
+  catch(error){warning='Saved settings could not be read. Defaults are temporary; saving keeps a backup.';try{invalidRaw=localStorage.getItem(storageKey);}catch{}}
+  // Upgrade only the untouched old default binding scheme; keep custom keys.
+  if(initial.players.length<=4&&initial.players.every((p,i)=>p.key==='Alt+Shift+'+(i+1))){
+    initial.players=initial.players.map((p,i)=>({...p,key:String(i+1)}));
+  }
+  const model=Core.create(initial),host=document.createElement('div');host.id='bobble-power-tracker';
+  const root=host.attachShadow({mode:'open'}),abort=new AbortController();
+  let open=false,disposed=false,editing=false,capture=null,drag=null,resizing=false,lastFocus=null;
+  const paths={box:'M4 7 12 3l8 4v10l-8 4-8-4V7Zm0 0 8 4 8-4m-8 4v10M8 5l8 4',
+    settings:'M9 4h6l1 3 3 1v6l-3 1-1 3H9l-1-3-3-1V8l3-1 1-3Zm3 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
+    clear:'M4 8a8 8 0 1 1 0 8M4 3v5h5',close:'m6 6 12 12M18 6 6 18'};
+  const svg=name=>'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+paths[name]+'"/></svg>';
+  root.innerHTML=`<style>
+    :host{all:initial;color-scheme:light;font:12px/1.4 "Segoe UI",system-ui,sans-serif;color:#233829}
+    *{box-sizing:border-box}[hidden]{display:none!important}button,input,select{font:inherit}button{cursor:pointer}
+    button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent,#375d29);outline-offset:2px}
+    svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+    ::selection{background:#d6e8c7;color:#233829}input{caret-color:var(--accent)}
+    .launcher{position:fixed;left:12px;bottom:76px;z-index:2147483645;display:flex;align-items:center;gap:7px;border:1px solid #a9b89f;border-radius:6px;padding:7px 10px;min-height:36px;background:#f3f6ee;color:#2c4f2c;box-shadow:0 3px 12px #0003}.launcher:hover{background:#e1ecd6}.launcher[aria-expanded=true]{background:#d6e8c7;border-color:#6e875d}
+    section{--bg:#f0f4eb;--row:#fff;--fg:#233829;--muted:#52664e;--accent:#375d29;--on:#d6e8c7;position:fixed;left:12px;top:72px;width:216px;min-width:min(190px,calc(100vw - 16px));max-width:min(360px,calc(100vw - 16px));min-height:152px;max-height:calc(100dvh - 24px);z-index:2147483645;background:var(--bg);color:var(--fg);border:1px solid #87997a;border-radius:6px;box-shadow:0 6px 22px #0004;overflow:auto;resize:both;scrollbar-width:thin;scrollbar-color:#8da17f var(--bg)}
+    section[data-theme=dark]{--bg:#202b25;--row:#2e3e33;--fg:#f1f6eb;--muted:#c3d1bd;--accent:#c0dfa8;--on:#435e36;color-scheme:dark}
+    section[data-theme=bobble]{--bg:#fff3d6;--row:#f4dfad;--fg:#562b23;--muted:#74462e;--accent:#7a3024;--on:#ebbd72}
+    header{display:flex;align-items:center;gap:2px;padding:4px 4px 4px 10px;cursor:grab;touch-action:none;user-select:none;border-bottom:1px solid #87997a55}header:active{cursor:grabbing}
+    header strong{font-size:12px;font-weight:600;flex:1}.icon{display:grid;place-items:center;width:28px;height:28px;border:0;background:transparent;color:var(--muted);border-radius:4px;padding:6px}.icon:hover,.icon[aria-expanded=true]{background:var(--on);color:var(--fg)}
+    .rows{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;padding:5px}.player{display:flex;align-items:center;gap:8px;width:100%;min-width:0;min-height:30px;padding:4px 7px;border:1px solid transparent;border-radius:4px;background:var(--row);color:var(--fg);text-align:left}.player[aria-checked=true]{background:var(--on);border-color:#87997a}.crate{display:grid;place-items:center;color:var(--muted)}.player[aria-checked=true] .crate{color:var(--fg)}.player[aria-checked=true] .name{font-weight:600}.name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.key{flex:none;font-size:10px;font-variant-numeric:tabular-nums;color:var(--muted);max-width:78px;min-width:19px;text-align:center;padding:1px 4px;border:1px solid #87997a70;border-radius:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.key:empty{display:none}.player:hover{border-color:#87997a}
+    form{padding:7px 9px 10px;border-top:1px solid #87997a55}.hint{font-size:11px;color:var(--muted);margin:0 0 8px}.editor-row{display:flex;gap:5px;margin-bottom:5px}input{min-width:0;width:100%;padding:5px;color:var(--fg);background:var(--row);border:1px solid #87997a;border-radius:3px}.binding{width:82px;flex:none;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    form button,select{min-height:30px;border:1px solid #87997a;border-radius:3px;color:var(--fg);background:var(--row);padding:4px 7px}form button:hover{background:var(--on)}button[type=submit]{background:var(--on);font-weight:600}.tools{display:flex;gap:5px;margin:9px 0;flex-wrap:wrap}select{max-width:100%}.notice{font-size:11px;color:var(--fg);margin:7px 0;overflow-wrap:anywhere}.notice:empty{display:none}.credit{display:block;font-size:10px;color:var(--muted);margin-top:10px}a{color:inherit;text-underline-offset:3px}button:disabled{opacity:.5;cursor:default}
+    @media(prefers-reduced-motion:no-preference){.player{transition:background-color 100ms ease-out}}
+  </style><button class="launcher" type="button" aria-controls="power-tracker-panel" aria-expanded="false">${svg('box')}Powers</button>
+  <section id="power-tracker-panel" data-theme="forest" aria-label="Manual power tracker" hidden>
+    <header><strong title="Drag to move · manual power marks">Powers</strong><button class="icon" id="clear" title="Clear all marks" aria-label="Clear all power marks">${svg('clear')}</button><button class="icon" id="settings" title="Names and shortcuts" aria-label="Edit tracker settings" aria-expanded="false">${svg('settings')}</button><button class="icon" id="hide" title="Hide tracker and pause its shortcuts" aria-label="Hide power tracker">${svg('close')}</button></header>
+    <div class="rows" role="group" aria-label="Player power marks"></div>
+    <form hidden aria-label="Tracker settings"><p class="hint">Manual marks only. Shortcuts work here while shown, not while typing. Click a shortcut to change it; Backspace clears it.</p><div class="editors"></div><div class="tools"><button type="button" id="add">Add</button><button type="button" id="remove">Remove last</button><select aria-label="Tracker theme"><option value="forest">Forest</option><option value="dark">Dark</option><option value="bobble">Bobble</option></select><button type="button" id="reset-position">Reset position</button></div><p class="notice" role="status" aria-live="polite"></p><div class="tools"><button type="submit">Save</button><button type="button" id="cancel">Cancel</button></div><span class="credit">Based on <a href="https://github.com/organpy/BLPT" target="_blank" rel="noopener noreferrer">BLPT by organ</a> · MIT</span></form>
+  </section>`;
+  const $=s=>root.querySelector(s),panel=$('section'),form=$('form'),list=$('.rows'),notice=$('.notice');
+  const listen=(target,event,fn,options={})=>target.addEventListener(event,fn,{...options,signal:abort.signal});
+  const clone=()=>model.state().config;
+  function persist(recover=false){
+    if(invalidRaw!==null&&!recover){notice.textContent=warning;return;}
+    try{if(invalidRaw!==null){localStorage.setItem(storageKey+'.recovery.'+Date.now(),invalidRaw);invalidRaw=null;}localStorage.setItem(storageKey,JSON.stringify(clone()));warning='';}
+    catch{warning='Settings could not be saved on this device. This session still works.';}
+    notice.textContent=warning;
+  }
+  function render(){
+    const state=model.state();panel.dataset.theme=state.config.theme;list.replaceChildren();
+    state.config.players.forEach((player,i)=>{
+      const row=document.createElement('button');row.type='button';row.className='player';row.setAttribute('role','checkbox');row.setAttribute('aria-checked',String(state.marked[i]));
+      row.setAttribute('aria-label',player.name+(player.key?' · '+player.key:''));row.title=player.name+(player.key?' · '+player.key:' · click only');
+      const crate=document.createElement('span');crate.className='crate';crate.innerHTML=svg('box');
+      const name=document.createElement('span');name.className='name';name.textContent=player.name;
+      const key=document.createElement('span');key.className='key';key.textContent=player.key;
+      row.append(crate,name,key);row.addEventListener('click',()=>toggle(i));list.append(row);
+    });
+  }
+  function toggle(index){
+    model.toggle(index);
+    // Update existing buttons so focus is not lost after each click/key press.
+    model.state().marked.forEach((marked,i)=>list.children[i]?.setAttribute('aria-checked',String(marked)));
+  }
+  function clear(){model.clear();model.state().marked.forEach((_,i)=>list.children[i]?.setAttribute('aria-checked','false'));}
+  function clamp(){
+    if(!open)return;
+    const r=panel.getBoundingClientRect(),w=window.innerWidth,h=window.innerHeight;
+    panel.style.left=Math.max(8,Math.min(r.left,w-r.width-8))+'px';panel.style.top=Math.max(8,Math.min(r.top,h-r.height-8))+'px';
+  }
+  function savePlacement(){if(!open)return;const r=panel.getBoundingClientRect();const cfg=clone();cfg.position={x:r.left,y:r.top};cfg.size={width:r.width,height:r.height};model.configure(cfg);persist();}
+  function show(value=true){
+    if(disposed)return;
+    open=!!value;panel.hidden=!open;$('.launcher').setAttribute('aria-expanded',String(open));
+    if(open){lastFocus=document.activeElement;clamp();}else{edit(false);if(lastFocus?.isConnected)lastFocus.focus();}
+  }
+  let draft=[];
+  function editorRows(){
+    const editors=$('.editors');editors.replaceChildren();
+    draft.forEach((player,i)=>{
+      const line=document.createElement('div');line.className='editor-row';
+      const name=document.createElement('input');name.value=player.name;name.maxLength=40;name.setAttribute('aria-label','Player '+(i+1)+' name');
+      name.addEventListener('input',()=>{draft[i].name=name.value;});
+      const key=document.createElement('button');key.type='button';key.className='binding';key.textContent=player.key||'No key';key.setAttribute('aria-label','Shortcut for player '+(i+1));
+      key.addEventListener('click',()=>{capture={index:i,button:key};key.textContent='Press key…';notice.textContent='Press a shortcut. Escape cancels; Backspace removes it.';});
+      line.append(name,key);editors.append(line);
+    });
+    $('#add').disabled=draft.length>=10;$('#remove').disabled=draft.length<=1;
+  }
+  function edit(value=true){
+    editing=value;capture=null;form.hidden=!value;$('#settings').setAttribute('aria-expanded',String(value));
+    if(value){draft=clone().players;editorRows();$('select').value=clone().theme;notice.textContent=warning;requestAnimationFrame(clamp);}
+    else if(open)$('#settings').focus();
+  }
+  listen($('.launcher'),'click',()=>show(!open));listen($('#hide'),'click',()=>show(false));listen($('#clear'),'click',clear);
+  listen($('#settings'),'click',()=>edit(!editing));listen($('#cancel'),'click',()=>{edit(false);$('#settings').focus();});
+  listen($('#add'),'click',()=>{if(draft.length<10){capture=null;draft.push({name:'Player '+(draft.length+1),key:''});editorRows();clamp();}});
+  listen($('#remove'),'click',()=>{if(draft.length>1){capture=null;draft.pop();editorRows();}});
+  listen($('#reset-position'),'click',()=>{panel.style.left='12px';panel.style.top='72px';panel.style.width='216px';panel.style.height='auto';clamp();savePlacement();});
+  listen(form,'submit',event=>{event.preventDefault();try{const cfg=clone();cfg.players=draft;cfg.theme=$('select').value;model.configure(cfg);persist(true);render();edit(false);clamp();$('#settings').focus();}catch(error){notice.textContent=String(error.message);}});
+  listen(window,'keydown',event=>{
+    if(!open||event.repeat||event.isComposing)return;
+    if(capture){
+      if(['Control','Alt','Shift','Meta'].includes(event.key))return;
+      event.preventDefault();event.stopImmediatePropagation();
+      if(event.key==='Escape'){const index=capture.index;capture=null;editorRows();root.querySelectorAll('.binding')[index]?.focus();notice.textContent=warning;return;}
+      const key=event.key==='Backspace'?'':Core.eventKey(event);
+      if(event.key!=='Backspace'&&!key){notice.textContent='Unsupported or reserved shortcut. Try 1 or Num1.';return;}
+      const index=capture.index;draft[index].key=key;capture=null;editorRows();root.querySelectorAll('.binding')[index]?.focus();notice.textContent=warning;return;
+    }
+    const target=event.composedPath()[0];
+    // Closed recorder Shadow DOM hides internal typing targets from this window
+    // listener; another add-on owning focus must never lose its number keys.
+    if(['bl-replay-lab','bobble-wardrobe'].includes(document.activeElement?.id)||event.composedPath().some(el=>['bl-replay-lab','bobble-wardrobe'].includes(el?.id)))return;
+    if(event.key==='Escape'&&root.contains(target)){event.preventDefault();event.stopPropagation();if(editing)edit(false);else show(false);return;}
+    if(target?.isContentEditable||['INPUT','TEXTAREA','SELECT','BUTTON'].includes(target?.tagName)&&!root.contains(target))return;
+    if(['INPUT','TEXTAREA','SELECT'].includes(target?.tagName))return;
+    if(editing||event.ctrlKey&&event.altKey&&event.shiftKey&&event.key.toLowerCase()==='h')return;
+    const key=Core.eventKey(event),index=clone().players.findIndex(p=>p.key&&p.key===key);
+    if(index<0)return;
+    event.preventDefault();event.stopImmediatePropagation();toggle(index);
+  },{capture:true});
+  listen($('header'),'pointerdown',event=>{
+    if(event.button!==0||event.target.closest('button'))return;
+    const r=panel.getBoundingClientRect();drag={x:event.clientX-r.left,y:event.clientY-r.top,id:event.pointerId};$('header').setPointerCapture(event.pointerId);event.preventDefault();
+  });
+  listen($('header'),'pointermove',event=>{if(!drag||drag.id!==event.pointerId)return;panel.style.left=event.clientX-drag.x+'px';panel.style.top=event.clientY-drag.y+'px';clamp();});
+  listen($('header'),'pointerup',()=>{if(drag){drag=null;savePlacement();}});
+  listen($('header'),'pointercancel',()=>{drag=null;});listen(window,'resize',clamp);
+  listen(panel,'pointerdown',event=>{resizing=event.target===panel;});
+  listen(window,'pointerup',()=>{if(resizing){resizing=false;clamp();savePlacement();}},{passive:true});
+  const cfg=clone();if(cfg.position){panel.style.left=cfg.position.x+'px';panel.style.top=cfg.position.y+'px';}
+  if(cfg.size){panel.style.width=Math.max(190,cfg.size.width)+'px';panel.style.height=Math.max(152,cfg.size.height)+'px';}
+  render();(document.body||document.documentElement).append(host);
+  window.__bobblePowerTracker=Object.freeze({show,hide:()=>show(false),clear,state:()=>({...model.state(),open,editing}),
+    dispose(){if(disposed)return;disposed=true;abort.abort();host.remove();delete window.__bobblePowerTracker;return true;}});
+})();
+
+} catch(error) { window.__bobblePowerTrackerError=String(error); }
 // Bobble wardrobe: session-local cosmetics. Build-specific; no gameplay writes.
 (function(){ if(window.__bobbleWardrobe){window.__bobbleWardrobe.show();return;}
 
@@ -400,6 +623,59 @@ window.__bobbleClubCatalog=Object.freeze({
   Snowman:{name:'Snow Ballers',tag:'snow_ballers',supported:false}
 });
 
+// Supported-build, read-only ownership resolver. Club identity is not a side:
+// mirror matches and pooled visuals must be resolved through current team lists.
+(() => {
+  'use strict';
+  window.__bobbleResolveSkinTeam=function(P,targets){
+    const H=P.M.HEAP32,U=P.M.HEAPU8;
+    if(!H||!U)return null;
+    const ptr=(p,n=16)=>Number.isInteger(p)&&p>65536&&!(p&3)&&p+n<U.length;
+    const at=(p,off)=>H[(p+off)>>2];
+    const text=(p,s)=>p>0&&p+s.length<U.length&&[...s].every((c,i)=>U[p+i]===c.charCodeAt(0))&&U[p+s.length]===0;
+    const named=(p,s,ns)=>ptr(p,100)&&text(at(p,8),s)&&text(at(p,12),ns);
+    const list=p=>{
+      if(!ptr(p))return null;
+      const live=at(p,8);if(!ptr(live))return null;
+      const n=at(live,12),arr=at(live,8);
+      if(n<1||n>16||!ptr(arr,16+n*4)||at(arr,12)<n)return null;
+      const items=Array.from({length:n},(_,i)=>at(arr,16+i*4));return items.every(p=>ptr(p))?items:null;
+    };
+    const f=P.T.get(7471);if(!f||f.name!=='18429'||f.length!==2)return null;
+    const go=P.find('ClientGameContext'),ctx=go&&P.component(go,'GameContext_Shared');
+    if(!ptr(ctx,212)||!at(ctx,8)||!named(at(ctx,0),'GameContext_Shared','DiscordGames.CG6'))return null;
+    const relay=at(ctx,28),visuals=at(ctx,204);
+    if(!ptr(relay,40)||!at(relay,8)||!named(at(relay,0),'NetGameRelayContext','DiscordGames.ChannelGamesFramework.Session'))return null;
+    const game=at(relay,36);
+    if(!ptr(game,52)||!at(game,8)||!named(at(game,0),'NetGameRelay','DiscordGames.ChannelGamesFramework.Session')||at(game,48)!==relay)return null;
+    if(!ptr(visuals,96)||!at(visuals,8)||!named(at(visuals,0),'GameContext_ClientVisuals','DiscordGames.CG6')||at(visuals,60)!==ctx)return null;
+    const stack=P.M.stackSave();let side;
+    try{side=f(ctx,0);}finally{P.M.stackRestore(stack);}
+    if(side!==0&&side!==1)return null;
+    const clubById=['Bug','Hawk','Bear','Tiger','Pig','Bull','Dino','SnowMan'];
+    const club=clubById[at(ctx,side===0?44:48)];if(!club||club==='SnowMan')return null;
+    const teams=list(at(visuals,92));if(!teams||teams.length!==2)return null;
+    const roots=new Set(),opponents=new Set(),rootMap=new Map(targets.map(t=>[t.root,t]));
+    for(let team=0;team<2;team++){
+      const athletes=list(at(teams[team],8));if(!athletes)return null;
+      for(const athlete of athletes){
+        const bobble=at(athlete,8);if(!ptr(bobble,12)||!at(bobble,8))return null;
+        const bobbleObject=P.call('gameObject',bobble);if(!bobbleObject)return null;
+        let t=P.call('transform',bobbleObject);
+        // BallBobble may be below the named team root. Never infer side from
+        // world coordinates, club name, turn order or the root's numeric label.
+        for(let depth=0;t&&depth<12;depth++,t=P.call('parent',t)){
+          const target=rootMap.get(t);if(!target)continue;
+          if(team===side&&target.club!==club)return null;
+          (team===side?roots:opponents).add(t);break;
+        }
+      }
+    }
+    if(!roots.size||[...roots].some(root=>opponents.has(root)))return null;
+    return {club,roots};
+  };
+})();
+
 // Native adapter and UI-independent state machine. No gameplay writes.
 (() => {
   'use strict';
@@ -418,23 +694,18 @@ window.__bobbleClubCatalog=Object.freeze({
   let enabled=false,remember=false,disposed=false,error='',timer=0,busy=false;
   let started=Date.now(),everAttached=false,expired=false,storageWarning='';
   let assignments=Object.fromEntries(clubs.map(c=>[c,'original']));
-  let autoSkin='',autoClub='';
-  // Indexes are the verified NetGameCG6 club catalog order, not match sides.
-  const clubById=['Bug','Hawk','Bear','Tiger','Pig','Bull','Dino','SnowMan'];
+  let autoSkin='',autoClub='',autoRoots=new Set();
   function localClub(targets){
-    if(typeof window.__bobbleLocalClubTest==='function')return window.__bobbleLocalClubTest(targets);
-    const f=P.T.get(7471);if(!f||f.name!=='18429'||f.length!==2)return '';
-    const go=P.find('ClientGameContext'),ctx=go&&P.component(go,'GameContext_Shared');if(!ctx)return '';
-    const stack=P.M.stackSave();let team;try{team=f(ctx,0);}finally{P.M.stackRestore(stack);}
-    if(team!==0&&team!==1)return '';
-    const id=P.M.HEAP32[(ctx+(team===0?44:48))>>2];if(!Number.isInteger(id)||id<0||id>=clubById.length)return '';
-    const club=clubById[id];return clubs.includes(club)&&targets.some(t=>t.club===club)?club:'';
+    let resolved;
+    try{resolved=window.__bobbleResolveSkinTeam?.(P,targets);}catch{return '';}
+    if(!resolved||!clubs.includes(resolved.club))return '';
+    autoRoots=resolved.roots;return resolved.club;
   }
-  function wanted(club){return autoSkin&&club===autoClub?autoSkin:assignments[club];}
+  function wanted(target){return autoSkin?(target.club===autoClub&&autoRoots.has(target.root)?autoSkin:'original'):assignments[target.club];}
   const normalize=s=>({Hawks:'Hawk',Pigs:'Pig'}[s]||s);
   function save(){
     try{
-      if(remember)localStorage.setItem(storageKey,JSON.stringify({version:1,assignments}));
+      if(remember)localStorage.setItem(storageKey,JSON.stringify({version:1,assignments,autoSkin}));
       else localStorage.removeItem(storageKey);
       storageWarning='';
     }catch(e){storageWarning='Preferences could not be saved. This session still works.';}
@@ -443,6 +714,7 @@ window.__bobbleClubCatalog=Object.freeze({
     const saved=JSON.parse(localStorage.getItem(storageKey)||'null');
     if(saved?.version===1){
       remember=true;
+      if(registry.has(saved.autoSkin)){autoSkin=saved.autoSkin;enabled=true;}
       for(const club of clubs){
         if(saved.assignments?.[club]==='original'||registry.has(saved.assignments?.[club]))assignments[club]=saved.assignments[club];
         else if(saved.assignments?.[club]==='nebula')storageWarning='The retired skin was removed. Its clubs now use Original; your other assignments are unchanged.';
@@ -485,17 +757,17 @@ window.__bobbleClubCatalog=Object.freeze({
   function reconcile(){
     if(disposed||busy)return;busy=true;
     try{
-      if(enabled&&!everAttached&&Date.now()-started>1800000){enabled=false;expired=true;}
+      if(enabled&&!autoSkin&&!everAttached&&Date.now()-started>1800000){enabled=false;expired=true;}
       if(!enabled){restoreAll();return;}
-      const targets=scan(),roots=new Map(targets.map(t=>[t.root,t]));autoClub=autoSkin?localClub(targets):'';
+      const targets=scan(),roots=new Map(targets.map(t=>[t.root,t]));autoRoots=new Set();autoClub=autoSkin?localClub(targets):'';
       for(const [root,row]of [...attached]){
         const target=roots.get(root);
-        if(!target||target.club!==row.club||wanted(row.club)!==row.skin||['failed-restored','restore-error','expired'].includes(row.controller.status().phase))release(root);
+        if(!target||target.club!==row.club||wanted(target)!==row.skin||['failed-restored','restore-error','expired'].includes(row.controller.status().phase))release(root);
       }
       // A restore error blocks new native writes, rather than piling up swaps.
       if(error)return;
       for(const target of targets){
-        const skin=wanted(target.club);
+        const skin=wanted(target);
         if(skin==='original'||attached.has(target.root)||failures.has(target.root))continue;
         let controller;
         try{
@@ -534,7 +806,7 @@ window.__bobbleClubCatalog=Object.freeze({
     for(const club of clubs)assignments[club]=skin;
     failures.clear();save();reconcile();return state();
   }
-  function reset(){if(!restore())return false;autoSkin='';autoClub='';assignments=Object.fromEntries(clubs.map(c=>[c,'original']));failures.clear();save();notify();return true;}
+  function reset(){if(!restore())return false;autoSkin='';autoClub='';autoRoots.clear();assignments=Object.fromEntries(clubs.map(c=>[c,'original']));failures.clear();save();notify();return true;}
   function key(e){if(e.ctrlKey&&e.altKey&&e.shiftKey&&e.code==='KeyH'){e.preventDefault();restore();}}
   function dispose(){if(!restore())return false;disposed=true;clearInterval(timer);window.removeEventListener('keydown',key,true);listeners.clear();return true;}
   // Migrate only after all signatures/preflight have succeeded; never reload the activity.
@@ -547,7 +819,7 @@ window.__bobbleClubCatalog=Object.freeze({
   }
   window.addEventListener('keydown',key,true);
   timer=setInterval(reconcile,1200);
-  window.__bobbleWardrobeEngine=Object.freeze({clubs,state,setEnabled,assign,assignAll,restore,reset,auto(skin){if(skin&&!registry.has(skin))throw Error('Unknown skin');autoSkin=skin||'';autoClub='';failures.clear();reconcile();return state();},retry(){failures.clear();error='';reconcile();},
+  window.__bobbleWardrobeEngine=Object.freeze({clubs,state,setEnabled,assign,assignAll,restore,reset,auto(skin){if(skin&&!registry.has(skin))throw Error('Unknown skin');autoSkin=skin||'';autoClub='';autoRoots.clear();failures.clear();save();reconcile();return state();},retry(){failures.clear();error='';reconcile();},
     remember(value){remember=!!value;save();notify();},subscribe(fn){listeners.add(fn);fn(state());return()=>listeners.delete(fn);},
     previewData(id){return registry.get(id)?.data||null;},
     register(skin){
@@ -852,11 +1124,11 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
           <div class="view-tools"><button id="rotate-left" type="button" aria-label="Rotate model left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a7 7 0 1 1-1 8M6 3v5H1"/></svg></button><span>Drag to rotate</span><button id="rotate-right" type="button" aria-label="Rotate model right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a7 7 0 1 0 1 8M18 3v5h5"/></svg></button><button id="reset-view" type="button" aria-label="Reset model view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-7 8 7M7 8v12h10V8M10 20v-7h4v7"/></svg></button></div>
           <div class="skin-title"><h3 id="skin-name"></h3><span class="index" id="skin-index"></span></div><p class="description" id="skin-description"></p>
         </div>
-         <div class="assignment"><h3>Make it yours</h3><label class="field-label" for="skin-picker">Choose a skin</label><select id="skin-picker"></select><label class="field-label club-label" for="club">Apply to a club</label><select id="club"></select><p class="assigned" id="assigned"></p><button class="primary" id="apply" type="button">Use this skin</button><button class="secondary" id="original" type="button">Use original appearance</button><button class="link" id="apply-all" type="button">Use this skin for all clubs</button><hr class="divider"><label class="remember"><input id="remember" type="checkbox">Remember assignments on this device</label><p class="fine">Skins start off when the activity reloads. Saved club choices stay on this device.</p><div class="notice" id="notice" role="alert" hidden></div><button class="link" id="retry" type="button" hidden>Retry compatible bobbles</button></div>
+          <div class="assignment"><h3>Your match. Your style.</h3><label class="field-label" for="skin-picker">Skin</label><select id="skin-picker"></select><button class="primary" id="apply" type="button">Use on my team</button><p class="team-safety">Only your team. Opponents keep their original look.</p><hr class="divider"><label class="remember"><input id="remember" type="checkbox">Remember my choices on this device</label><p class="fine">Remembered auto-team skins turn on next time. Manual club overrides start off.</p><details class="club-overrides"><summary>Manual club overrides</summary><p class="fine">These target a club, not your side. Auto-team mode must be off.</p><label class="field-label club-label" for="club">Club</label><select id="club"></select><p class="assigned" id="assigned"></p><button class="secondary" id="apply-club" type="button">Use for selected club</button><button class="secondary" id="original" type="button">Restore selected club</button><button class="link" id="apply-all" type="button">Use for all clubs, including opponents</button></details><div class="notice" id="notice" role="alert" hidden></div><button class="link" id="retry" type="button" hidden>Retry compatible bobbles</button></div>
       </div><footer><p class="status" role="status" aria-live="polite"></p><p class="hints"><kbd>← →</kbd> browse · <kbd>Esc</kbd> close</p><div class="foot-actions"><button class="restore" id="restore" type="button">Restore all</button><button id="reset" type="button">Reset clubs</button></div></footer>
     </section>`;root.append(div);document.documentElement.append(host);
   const $=s=>root.querySelector(s),panel=$('section'),club=$('#club');
-  const autoControl=document.createElement('label');autoControl.className='remember';autoControl.style.margin='14px 0 4px';autoControl.innerHTML='<input id="auto-team" type="checkbox">Automatically use this skin for my team';$('#apply-all').after(autoControl);
+   const autoControl=document.createElement('label');autoControl.className='remember auto-team';autoControl.innerHTML='<input id="auto-team" type="checkbox">Auto-apply to my team';$('.team-safety').after(autoControl);
   const autoNote=document.createElement('p');autoNote.className='fine';autoNote.id='auto-team-note';autoControl.after(autoNote);
   $('canvas').setAttribute('aria-label','3D skin preview. Drag to rotate; Ctrl+scroll to zoom. J and L rotate; Home resets. Left and right arrows browse skins.');
   $('.view-tools span').textContent='Drag to rotate · Ctrl+scroll zoom';
@@ -877,7 +1149,22 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
   $('.collection').append(lab);
   $('#halo-label').textContent='Selection halo · preview only';
    const defaults=window.__bobbleAccentDefaults||{halo:'#19b9ce',arrow:'#f0aa42'};
-   accentStyle.textContent+=`.club-label{margin-top:18px}.accent-lab summary{cursor:pointer;font-size:13px;font-weight:600;min-height:36px;padding:8px 0}.accent-lab summary span{font-size:11px;font-weight:400;color:#526048;margin-left:8px}.accent-lab[open] summary{margin-bottom:12px}.accent-heading{display:none}.collection{align-self:stretch}.stage{height:clamp(260px,42dvh,360px)}.remember{font-size:12px;line-height:1.5}.remember input{width:16px;height:16px}.view-tools button{min-height:36px;min-width:36px}.close{min-height:40px;min-width:40px}@media(max-width:620px){.stage{height:290px}.collection{padding-bottom:12px}}`;
+   accentStyle.textContent+=`
+     :host{--ink:#283124;--muted:#526048;--edge:#c8d1bd;--leaf:#3e751a}input{caret-color:var(--leaf)}
+     header{padding:18px 24px}h2{font-size:26px;font-weight:500}.title p{margin-top:6px}
+     .assignment{padding:24px;background:#f5f7f0}.assignment h3{font-size:19px;font-weight:500;margin-bottom:22px}
+     .primary{margin-top:14px;min-height:44px}.team-safety{font-size:12px;line-height:1.5;color:var(--muted);margin:10px 0 16px}
+     .auto-team{padding:12px;background:#e5eddc;border:1px solid var(--edge);border-radius:5px;font-weight:600}.fine{line-height:1.6}
+     #auto-team-note{min-height:36px;margin:8px 0 0}.club-label{margin-top:12px}
+     .club-overrides{border-top:1px solid var(--edge);margin-top:20px;padding-top:10px}.club-overrides summary,.accent-lab summary{cursor:pointer;font-size:13px;font-weight:600;min-height:36px;padding:8px 0}
+     summary:focus-visible{outline:3px solid var(--leaf);outline-offset:3px}.club-overrides .fine{margin-bottom:14px}.club-overrides .link{line-height:1.5;white-space:normal;margin-top:8px}.assigned{margin-bottom:8px;min-height:0}.secondary{min-height:36px}
+     .accent-lab summary span{font-size:11px;font-weight:400;color:var(--muted);margin-left:8px}.accent-lab[open] summary{margin-bottom:12px}.accent-heading{display:none}
+     .collection{align-self:stretch}.stage{height:clamp(260px,42dvh,360px)}.skin-title h3{font-size:26px;font-weight:500}.description{line-height:1.6;max-width:45ch}
+     .remember{font-size:12px;line-height:1.5;cursor:pointer}.remember input{width:16px;height:16px}.view-tools button{min-height:36px;min-width:36px}.close{min-height:40px;min-width:40px}
+     footer{gap:12px}.status{line-height:1.5}.notice{margin-top:14px;line-height:1.6}
+     @media(max-width:620px){header{padding:14px 16px}.stage{height:250px}.collection{padding-bottom:14px}.assignment{padding:20px 18px}.assignment h3{margin-bottom:16px}h2{font-size:23px}.toggle-wrap{gap:0}.skin-title h3{font-size:24px}}
+     @media(max-height:500px) and (min-width:621px){.stage{height:225px}.collection{align-self:start}}
+   `;
   let accentDraft={...(window.__bobbleAccentSettings||defaults)};
   function syncAccents(){
     for(const [key,id]of [['halo','halo'],['arrow','aim']]){$('#'+id+'-color').value=accentDraft[key];$('#'+id+'-hex').textContent=accentDraft[key].toUpperCase();}
@@ -912,11 +1199,11 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
      $('#skin-picker').value=skin?.id||'';$('#skin-picker').disabled=!skin;
     for(const id of ['#previous','#next']){$(id).disabled=s.catalog.length<2;$(id).title=s.catalog.length<2?'One skin installed. More skins will appear here when added.':'';}
     $('.switch').setAttribute('aria-checked',String(s.enabled));$('.dot').classList.toggle('on',s.enabled);$('#remember').checked=s.remember;
-    $('#auto-team').checked=!!s.autoSkin;$('#auto-team').disabled=typeof engine.auto!=='function'||!skin;$('#auto-team-note').textContent=s.autoSkin?(s.autoClub?'Auto team: '+(catalog[s.autoClub]?.name||s.autoClub)+' · '+s.autoSkin:'Waiting to identify your supported club'):'Uses the displayed skin for your team; manual club choices remain unchanged.';
+     $('#auto-team').checked=!!s.autoSkin;$('#auto-team').disabled=typeof engine.auto!=='function'||!skin;$('#auto-team-note').textContent=s.autoSkin?(s.autoClub?'Your team: '+(catalog[s.autoClub]?.name||s.autoClub)+' · '+(s.catalog.find(x=>x.id===s.autoSkin)?.name||s.autoSkin):'Waiting for your team. No skin is applied until ownership is verified.'):'Choose Use on my team to equip the displayed skin. Manual overrides are separate.';
     const count=s.counts[club.value]||0,name=catalog[club.value]?.name||club.value;
     $('#assigned').textContent=count?name+' · '+count+' applied':(currentSkin?.name||'Original appearance')+(currentSkin?(s.enabled?' · waiting for a compatible bobble':' · skins off'):'');
-    $('#apply').disabled=!skin;$('#apply').textContent=current===skin?.id&&s.enabled?'Equipped for this club':'Use this skin';
-    $('#original').disabled=current==='original';$('#apply-all').disabled=!skin;
+     $('#apply').disabled=!skin;$('#apply').textContent=s.autoSkin===skin?.id&&s.enabled?(s.attached?'Equipped for my team':'Selected for my team'):'Use on my team';
+     $('#apply-club').disabled=!skin||!!s.autoSkin;$('#original').disabled=current==='original'||!!s.autoSkin;$('#apply-all').disabled=!skin||!!s.autoSkin;
     const message=s.error?'Restore needs attention':s.expired?'Waiting expired. Switch skins on to retry.':!s.enabled?'Original visuals · custom skins off':s.attached?s.attached+' custom bobble'+(s.attached===1?'':'s')+' applied':'Custom skins on · waiting for a match';
     if(message!==lastStatus){$('.status').textContent=message;lastStatus=message;}
     const notices=[s.error,s.storageWarning,...s.failures].filter(Boolean);$('#notice').hidden=!notices.length;$('#notice').textContent=notices.join('\n');$('#retry').hidden=!s.failures.length&&!s.error;
@@ -933,13 +1220,14 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
   $('#reset-accents').addEventListener('click',()=>{accentDraft={...defaults};syncAccents();});
   $('#apply-accents').addEventListener('click',()=>{window.__bobbleAccentSettings={...accentDraft};syncAccents();$('#accent-state').textContent='Saved for this session · halo is preview-only';});
   syncAccents();
-  $('#apply').addEventListener('click',()=>{if(selected()){engine.assign(club.value,selected().id);if(!engine.state().enabled)engine.setEnabled(true);}});
+   $('#apply').addEventListener('click',()=>{if(selected()){engine.auto(selected().id);if(!engine.state().enabled)engine.setEnabled(true);}});
+   $('#apply-club').addEventListener('click',()=>{if(selected()&&!engine.state().autoSkin){engine.assign(club.value,selected().id);if(!engine.state().enabled)engine.setEnabled(true);}});
   $('#original').addEventListener('click',()=>engine.assign(club.value,'original'));$('#apply-all').addEventListener('click',()=>{if(selected()){engine.assignAll(selected().id);if(!engine.state().enabled)engine.setEnabled(true);}});
   $('#auto-team').addEventListener('change',e=>{engine.auto(e.target.checked?selected()?.id:'');if(e.target.checked&&!engine.state().enabled)engine.setEnabled(true);});
   $('.switch').addEventListener('click',()=>engine.setEnabled(!engine.state().enabled));$('#remember').addEventListener('change',e=>engine.remember(e.target.checked));$('#restore').addEventListener('click',()=>engine.restore());$('#reset').addEventListener('click',()=>engine.reset());$('#retry').addEventListener('click',()=>engine.retry());
   for(const event of ['pointerdown','pointerup','pointermove','click','dblclick','wheel','keyup'])root.addEventListener(event,e=>e.stopPropagation());
   root.addEventListener('keydown',e=>{if(e.code==='Escape'){e.preventDefault();show(false);}else if(!['SELECT','INPUT'].includes(e.target.tagName)&&['ArrowLeft','ArrowRight'].includes(e.code)){e.preventDefault();browse(e.code==='ArrowLeft'?-1:1);}e.stopPropagation();});
-  function key(e){if(e.ctrlKey&&e.altKey&&e.shiftKey&&e.code==='KeyW'){e.preventDefault();show(!open);}}
+   function key(e){if(e.key==='Escape'&&open&&[host,document.body,document.documentElement].includes(document.activeElement)){e.preventDefault();show(false);return;}if(e.ctrlKey&&e.altKey&&e.shiftKey&&e.code==='KeyW'){e.preventDefault();show(!open);}}
   window.addEventListener('keydown',key,true);const unsubscribe=engine.subscribe(update);
   function detachUI(){disposed=true;unsubscribe();window.removeEventListener('keydown',key,true);viewer?.dispose();host.remove();}
   window.__bobbleWardrobe=Object.freeze({show:()=>show(true),hide:()=>show(false),status:engine.state,preview:()=>viewer?.info(),detachUI,

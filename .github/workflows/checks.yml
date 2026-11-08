@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: '24'
       - run: python -m pip install -r launcher/requirements-build.txt
-      - name: Wardrobe checks
+      - name: Wardrobe and tracker checks
         working-directory: hydro/integration
         shell: pwsh
         run: |
@@ -25,6 +25,10 @@ jobs:
           node visual-test.cjs --quality
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node wardrobe-test.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node skin-team-test.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node power-tracker-test.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node aim-accent-test.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

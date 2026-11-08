@@ -18,10 +18,15 @@ cd launcher
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-Output: `launcher/release-preview-5/BobbleWardrobe-Preview.exe`.
+Default output: `launcher/release-preview-power-tracker/BobbleWardrobe-Preview.exe`.
+The published Preview 6 uses `-DistPath release-preview-6`.
 The script prepares the bundle, runs installer/update/transport tests, packages
 Python/Tk with PyInstaller, and tests the frozen helper against isolated fixtures.
 It does not register real startup work or modify a real Discord installation.
+It also validates the pinned recorder source manifest, runs recorder/storage and
+combined-addon/clip-helper tests, and packages the fixed localhost worker/offline
+player. Node.js 22+ is an optional end-user requirement for public clip links;
+recording and local video saving do not require it. No private assister is read.
 If the old output is open, close it yourself or use `-DistPath release-custom`.
 
 To run from source for UI inspection: `python launcher.py`. The source GUI cannot
@@ -35,6 +40,8 @@ From `hydro/integration`:
 node preview-test.cjs --quality
 node visual-test.cjs --quality
 node wardrobe-test.cjs
+node skin-team-test.cjs
+node power-tracker-test.cjs
 node aim-accent-test.cjs
 $env:BOBBLE_ASSET_VARIANT='quality'
 python -m unittest -v test_visual_envelope.py test_nebula_rig.py test_fitted_assets.py test_base_styles.py test_native_scale.py
@@ -42,6 +49,10 @@ python build-wardrobe.py --quality
 ```
 
 Then rerun `launcher/build.ps1` to copy the new JS bundle and package it.
+For the combined runtime's browser coexistence/error-isolation checks, run
+`node launcher/test_addons_browser.cjs` from the repository root with Chrome
+installed (`BOBBLE_CHROME` can select its executable). Its native bindings are
+synthetic and screenshots are labeled fixtures, not actual game evidence.
 Use `python -m http.server 8765 --bind 127.0.0.1` in `hydro/integration` for
 `http://127.0.0.1:8765/tests/showroom-fixture.html` (simulated club state, not native proof).
 The existing browser resize regression has an unresolved failure in some automated

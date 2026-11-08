@@ -1,4 +1,4 @@
-# Preview 5 / payload 13
+# Quality models · retained from Preview 5 in Preview 6 / payload 17
 
 Nine textured Meshy-derived character adaptations are included. The retired
 tenth skin is no longer bundled/selectable; its saved assignments fall back to
@@ -50,7 +50,7 @@ stay at 6 MiB; signed envelopes at 48 MiB; decoded compact assets at 64 MiB.
 Signature, exact-file-set, digest and replay checks remain enabled.
 
 Preview 4+ pins the separate HTTPS quality feed and existing public key. Preview
-4's helper can receive payload 13 automatically after Discord exits. Preview 5
+4's helper can receive payload 17 automatically after Discord exits. Preview 5
 adds signed desktop-launcher handoff; older launchers require one download for
 that feature. Preview 1–3 require explicit reinstall to migrate feed/limits.
 Legacy releases/feed stay preserved. No private signing key is distributed.

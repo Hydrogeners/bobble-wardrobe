@@ -12,6 +12,12 @@ scan or the availability of source as proof that a binary was independently buil
 - An owned wrapper/backup in selected Discord Stable `resources` directories.
   Existing archive/bootstrap bytes are journaled for restoration.
 - In the activity: locally cloned meshes/materials, subject to build/signature guards.
+- An independent manual Power Tracker panel and activity-scoped shortcuts; no
+  automatic power detection or game-memory access by the tracker. Names, keybinds,
+  theme and placement preferences use activity localStorage; marks do not persist.
+- A Recorder panel: silent game-canvas capture only after the user arms it, a
+  read-only native participation/lifecycle reader, and local browser disk storage
+  or explicitly warned memory fallback. No microphone or desktop capture.
 
 It never intentionally force-kills Discord, reads login tokens/profiles, changes
 gameplay/networking, exposes a TCP debugging port or includes telemetry. The
@@ -27,6 +33,18 @@ The desktop launcher also checks the pinned `launcher_updates.FEED` raw URL.
 Verified newer launchers download from this repository's GitHub release assets;
 HTTPS redirects are restricted to GitHub's allowlisted asset hosts. There is no
 analytics service or account system operated by this project.
+
+Optional clip links use the localhost Node helper, explicitly started from the
+launcher (Node.js 22+ required). It binds only 127.0.0.1:8789, checks exact activity
+Origin/Host, and allows only the hardcoded Litterbox provider with explicit clip
+consent. No arbitrary URL/path execution is exposed. Clips include visible names;
+anyone with a public link can watch. Expiry/removal and revocation are not guaranteed.
+Closing the owning launcher stops its child helper, not unrelated processes.
+Already uploaded bytes cannot be recalled. Local video saving needs no helper.
+
+Recorder cache is not a backup: profile/site-data changes, eviction and unfinished
+recording failures can lose video. Uninstall removes the shared loader, not
+separately downloaded videos or public links; save/check important files first.
 
 The user still has Discord's normal network connections; those are not controlled
 by this project. Maintainer publishing scripts use GitHub credentials through Git,

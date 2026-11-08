@@ -1,7 +1,7 @@
 {
   "variant": "quality",
   "assetBytes": 29105350,
-  "bundledBytes": 20523314,
+  "bundledBytes": 20548627,
   "decodedSHA256": "dc8450cdf3818bfbd17cc02faa22c13f9eb59254079a461feb8e8a50ee3661ad",
   "skins": 9,
   "compression": "gzip; fflate 0.8.3, MIT; quality geometry byte planes"

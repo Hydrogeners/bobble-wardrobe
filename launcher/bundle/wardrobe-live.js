@@ -1,3 +1,229 @@
+// Bobble Addons: Wardrobe + manual Power Tracker + Recorder 0.3.0.
+(function(){
+try {
+// Power Tracker: independent manual activity mod, no game-memory access.
+/*
+MIT License
+
+Copyright (c) 2025 organ
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+*/
+try {
+// Manual BLPT-style tracking, reimplemented from organpy/BLPT (MIT, 2025 organ).
+// Pure state; no game, network, storage or DOM access.
+(() => {
+  'use strict';
+  const defaults=()=>({schema:1,players:Array.from({length:4},(_,i)=>({name:'Player '+(i+1),key:String(i+1)})),theme:'forest',position:null,size:null});
+  function shortcut(value){
+    if(typeof value!=='string'||value.length>50)throw Error('Use a short keyboard shortcut.');
+    if(!value.trim())return '';
+    const parts=value.split('+').map(p=>p.trim()),key=parts.pop();
+    const aliases={ctrl:'Ctrl',control:'Ctrl',alt:'Alt',shift:'Shift'};
+    const mods=parts.map(p=>aliases[p.toLowerCase()]);
+    if(mods.some(p=>!p)||new Set(mods).size!==mods.length)throw Error('Use Ctrl, Alt or Shift once per shortcut.');
+    let main=key.toUpperCase();
+    if(/^num(?:pad)?[0-9]$/i.test(key))main='Num'+key.slice(-1);
+    if(!/^(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Num[0-9])$/.test(main))throw Error('Choose a letter, number, F-key or Num0–9.');
+    const label=[...['Ctrl','Alt','Shift'].filter(p=>mods.includes(p)),main].join('+');
+    if(/^Ctrl\+[1-4]$/.test(label)||label==='Ctrl+Alt+Shift+H')throw Error('That shortcut is reserved for your other mods.');
+    if(['Alt+F4','Ctrl+F4','F1','F5'].includes(label))throw Error('Choose a shortcut that is not used by the app.');
+    return label;
+  }
+  function eventKey(event){
+    if(event.metaKey||event.isComposing)return '';
+    const key=/^Numpad[0-9]$/.test(event.code)?'Num'+event.code.slice(-1):event.key;
+    try{return shortcut([event.ctrlKey?'Ctrl':'',event.altKey?'Alt':'',event.shiftKey?'Shift':'',key].filter(Boolean).join('+'));}catch{return '';}
+  }
+  function validate(data){
+    if(!data||data.schema!==1||!Array.isArray(data.players)||data.players.length<1||data.players.length>10)throw Error('Use 1–10 players.');
+    const used=new Set();
+    const players=data.players.map(p=>{
+      if(!p||typeof p.name!=='string'||!p.name.trim()||p.name.trim().length>40||/[\x00-\x1f]/.test(p.name))throw Error('Give each player a name of 1–40 characters.');
+      const key=shortcut(p.key||'');
+      if(key&&used.has(key))throw Error('Each shortcut must be unique.');
+      if(key)used.add(key);
+      return {name:p.name.trim(),key};
+    });
+    if(!['forest','dark','bobble'].includes(data.theme))throw Error('Choose a supported theme.');
+    const pair=(value,keys)=>value===null||value===undefined?null:keys.every(k=>Number.isFinite(value[k])&&Math.abs(value[k])<=100000)?Object.fromEntries(keys.map(k=>[k,value[k]])):null;
+    return {schema:1,players,theme:data.theme,position:pair(data.position,['x','y']),size:pair(data.size,['width','height'])};
+  }
+  function create(data=defaults()){
+    let config=validate(data),marked=config.players.map(()=>false);
+    return Object.freeze({
+      state:()=>({config:JSON.parse(JSON.stringify(config)),marked:marked.slice()}),
+      toggle(index){if(!Number.isInteger(index)||index<0||index>=marked.length)throw Error('Unknown player.');marked[index]=!marked[index];},
+      clear(){marked.fill(false);},
+      configure(data){const next=validate(data);marked=next.players.map((p,i)=>config.players[i]?.name===p.name?marked[i]:false);config=next;},
+    });
+  }
+  window.BLPowerTrackerCore=Object.freeze({defaults,shortcut,eventKey,validate,create});
+})();
+
+/* THESIS: a match-side checklist small enough to forget until needed.
+ * OWN-WORLD: manager pearl/forest, Segoe UI, compact name rows and crate marks.
+ * STORY: open Powers, mark observed boxes, clear for a new match; settings tuck away.
+ * FIRST VIEWPORT: 216px draggable panel, four 28px rows, no dashboard chrome.
+ * FORM: isolated activity Shadow DOM; manual state only, no game or network access.
+ * BLPT interaction model: organpy/BLPT, MIT, copyright 2025 organ. */
+(() => {
+  'use strict';
+  if(window.__bobblePowerTracker)return;
+  const Core=window.BLPowerTrackerCore;if(!Core)throw Error('Power Tracker state unavailable');
+  const storageKey='bobble-addons.power-tracker.v1';let warning='',initial=Core.defaults(),invalidRaw=null;
+  try{const raw=localStorage.getItem(storageKey);if(raw){if(raw.length>16384)throw Error('Saved settings are too large');initial=Core.validate(JSON.parse(raw));}}
+  catch(error){warning='Saved settings could not be read. Defaults are temporary; saving keeps a backup.';try{invalidRaw=localStorage.getItem(storageKey);}catch{}}
+  // Upgrade only the untouched old default binding scheme; keep custom keys.
+  if(initial.players.length<=4&&initial.players.every((p,i)=>p.key==='Alt+Shift+'+(i+1))){
+    initial.players=initial.players.map((p,i)=>({...p,key:String(i+1)}));
+  }
+  const model=Core.create(initial),host=document.createElement('div');host.id='bobble-power-tracker';
+  const root=host.attachShadow({mode:'open'}),abort=new AbortController();
+  let open=false,disposed=false,editing=false,capture=null,drag=null,resizing=false,lastFocus=null;
+  const paths={box:'M4 7 12 3l8 4v10l-8 4-8-4V7Zm0 0 8 4 8-4m-8 4v10M8 5l8 4',
+    settings:'M9 4h6l1 3 3 1v6l-3 1-1 3H9l-1-3-3-1V8l3-1 1-3Zm3 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
+    clear:'M4 8a8 8 0 1 1 0 8M4 3v5h5',close:'m6 6 12 12M18 6 6 18'};
+  const svg=name=>'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+paths[name]+'"/></svg>';
+  root.innerHTML=`<style>
+    :host{all:initial;color-scheme:light;font:12px/1.4 "Segoe UI",system-ui,sans-serif;color:#233829}
+    *{box-sizing:border-box}[hidden]{display:none!important}button,input,select{font:inherit}button{cursor:pointer}
+    button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent,#375d29);outline-offset:2px}
+    svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+    ::selection{background:#d6e8c7;color:#233829}input{caret-color:var(--accent)}
+    .launcher{position:fixed;left:12px;bottom:76px;z-index:2147483645;display:flex;align-items:center;gap:7px;border:1px solid #a9b89f;border-radius:6px;padding:7px 10px;min-height:36px;background:#f3f6ee;color:#2c4f2c;box-shadow:0 3px 12px #0003}.launcher:hover{background:#e1ecd6}.launcher[aria-expanded=true]{background:#d6e8c7;border-color:#6e875d}
+    section{--bg:#f0f4eb;--row:#fff;--fg:#233829;--muted:#52664e;--accent:#375d29;--on:#d6e8c7;position:fixed;left:12px;top:72px;width:216px;min-width:min(190px,calc(100vw - 16px));max-width:min(360px,calc(100vw - 16px));min-height:152px;max-height:calc(100dvh - 24px);z-index:2147483645;background:var(--bg);color:var(--fg);border:1px solid #87997a;border-radius:6px;box-shadow:0 6px 22px #0004;overflow:auto;resize:both;scrollbar-width:thin;scrollbar-color:#8da17f var(--bg)}
+    section[data-theme=dark]{--bg:#202b25;--row:#2e3e33;--fg:#f1f6eb;--muted:#c3d1bd;--accent:#c0dfa8;--on:#435e36;color-scheme:dark}
+    section[data-theme=bobble]{--bg:#fff3d6;--row:#f4dfad;--fg:#562b23;--muted:#74462e;--accent:#7a3024;--on:#ebbd72}
+    header{display:flex;align-items:center;gap:2px;padding:4px 4px 4px 10px;cursor:grab;touch-action:none;user-select:none;border-bottom:1px solid #87997a55}header:active{cursor:grabbing}
+    header strong{font-size:12px;font-weight:600;flex:1}.icon{display:grid;place-items:center;width:28px;height:28px;border:0;background:transparent;color:var(--muted);border-radius:4px;padding:6px}.icon:hover,.icon[aria-expanded=true]{background:var(--on);color:var(--fg)}
+    .rows{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;padding:5px}.player{display:flex;align-items:center;gap:8px;width:100%;min-width:0;min-height:30px;padding:4px 7px;border:1px solid transparent;border-radius:4px;background:var(--row);color:var(--fg);text-align:left}.player[aria-checked=true]{background:var(--on);border-color:#87997a}.crate{display:grid;place-items:center;color:var(--muted)}.player[aria-checked=true] .crate{color:var(--fg)}.player[aria-checked=true] .name{font-weight:600}.name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.key{flex:none;font-size:10px;font-variant-numeric:tabular-nums;color:var(--muted);max-width:78px;min-width:19px;text-align:center;padding:1px 4px;border:1px solid #87997a70;border-radius:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.key:empty{display:none}.player:hover{border-color:#87997a}
+    form{padding:7px 9px 10px;border-top:1px solid #87997a55}.hint{font-size:11px;color:var(--muted);margin:0 0 8px}.editor-row{display:flex;gap:5px;margin-bottom:5px}input{min-width:0;width:100%;padding:5px;color:var(--fg);background:var(--row);border:1px solid #87997a;border-radius:3px}.binding{width:82px;flex:none;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    form button,select{min-height:30px;border:1px solid #87997a;border-radius:3px;color:var(--fg);background:var(--row);padding:4px 7px}form button:hover{background:var(--on)}button[type=submit]{background:var(--on);font-weight:600}.tools{display:flex;gap:5px;margin:9px 0;flex-wrap:wrap}select{max-width:100%}.notice{font-size:11px;color:var(--fg);margin:7px 0;overflow-wrap:anywhere}.notice:empty{display:none}.credit{display:block;font-size:10px;color:var(--muted);margin-top:10px}a{color:inherit;text-underline-offset:3px}button:disabled{opacity:.5;cursor:default}
+    @media(prefers-reduced-motion:no-preference){.player{transition:background-color 100ms ease-out}}
+  </style><button class="launcher" type="button" aria-controls="power-tracker-panel" aria-expanded="false">${svg('box')}Powers</button>
+  <section id="power-tracker-panel" data-theme="forest" aria-label="Manual power tracker" hidden>
+    <header><strong title="Drag to move · manual power marks">Powers</strong><button class="icon" id="clear" title="Clear all marks" aria-label="Clear all power marks">${svg('clear')}</button><button class="icon" id="settings" title="Names and shortcuts" aria-label="Edit tracker settings" aria-expanded="false">${svg('settings')}</button><button class="icon" id="hide" title="Hide tracker and pause its shortcuts" aria-label="Hide power tracker">${svg('close')}</button></header>
+    <div class="rows" role="group" aria-label="Player power marks"></div>
+    <form hidden aria-label="Tracker settings"><p class="hint">Manual marks only. Shortcuts work here while shown, not while typing. Click a shortcut to change it; Backspace clears it.</p><div class="editors"></div><div class="tools"><button type="button" id="add">Add</button><button type="button" id="remove">Remove last</button><select aria-label="Tracker theme"><option value="forest">Forest</option><option value="dark">Dark</option><option value="bobble">Bobble</option></select><button type="button" id="reset-position">Reset position</button></div><p class="notice" role="status" aria-live="polite"></p><div class="tools"><button type="submit">Save</button><button type="button" id="cancel">Cancel</button></div><span class="credit">Based on <a href="https://github.com/organpy/BLPT" target="_blank" rel="noopener noreferrer">BLPT by organ</a> · MIT</span></form>
+  </section>`;
+  const $=s=>root.querySelector(s),panel=$('section'),form=$('form'),list=$('.rows'),notice=$('.notice');
+  const listen=(target,event,fn,options={})=>target.addEventListener(event,fn,{...options,signal:abort.signal});
+  const clone=()=>model.state().config;
+  function persist(recover=false){
+    if(invalidRaw!==null&&!recover){notice.textContent=warning;return;}
+    try{if(invalidRaw!==null){localStorage.setItem(storageKey+'.recovery.'+Date.now(),invalidRaw);invalidRaw=null;}localStorage.setItem(storageKey,JSON.stringify(clone()));warning='';}
+    catch{warning='Settings could not be saved on this device. This session still works.';}
+    notice.textContent=warning;
+  }
+  function render(){
+    const state=model.state();panel.dataset.theme=state.config.theme;list.replaceChildren();
+    state.config.players.forEach((player,i)=>{
+      const row=document.createElement('button');row.type='button';row.className='player';row.setAttribute('role','checkbox');row.setAttribute('aria-checked',String(state.marked[i]));
+      row.setAttribute('aria-label',player.name+(player.key?' · '+player.key:''));row.title=player.name+(player.key?' · '+player.key:' · click only');
+      const crate=document.createElement('span');crate.className='crate';crate.innerHTML=svg('box');
+      const name=document.createElement('span');name.className='name';name.textContent=player.name;
+      const key=document.createElement('span');key.className='key';key.textContent=player.key;
+      row.append(crate,name,key);row.addEventListener('click',()=>toggle(i));list.append(row);
+    });
+  }
+  function toggle(index){
+    model.toggle(index);
+    // Update existing buttons so focus is not lost after each click/key press.
+    model.state().marked.forEach((marked,i)=>list.children[i]?.setAttribute('aria-checked',String(marked)));
+  }
+  function clear(){model.clear();model.state().marked.forEach((_,i)=>list.children[i]?.setAttribute('aria-checked','false'));}
+  function clamp(){
+    if(!open)return;
+    const r=panel.getBoundingClientRect(),w=window.innerWidth,h=window.innerHeight;
+    panel.style.left=Math.max(8,Math.min(r.left,w-r.width-8))+'px';panel.style.top=Math.max(8,Math.min(r.top,h-r.height-8))+'px';
+  }
+  function savePlacement(){if(!open)return;const r=panel.getBoundingClientRect();const cfg=clone();cfg.position={x:r.left,y:r.top};cfg.size={width:r.width,height:r.height};model.configure(cfg);persist();}
+  function show(value=true){
+    if(disposed)return;
+    open=!!value;panel.hidden=!open;$('.launcher').setAttribute('aria-expanded',String(open));
+    if(open){lastFocus=document.activeElement;clamp();}else{edit(false);if(lastFocus?.isConnected)lastFocus.focus();}
+  }
+  let draft=[];
+  function editorRows(){
+    const editors=$('.editors');editors.replaceChildren();
+    draft.forEach((player,i)=>{
+      const line=document.createElement('div');line.className='editor-row';
+      const name=document.createElement('input');name.value=player.name;name.maxLength=40;name.setAttribute('aria-label','Player '+(i+1)+' name');
+      name.addEventListener('input',()=>{draft[i].name=name.value;});
+      const key=document.createElement('button');key.type='button';key.className='binding';key.textContent=player.key||'No key';key.setAttribute('aria-label','Shortcut for player '+(i+1));
+      key.addEventListener('click',()=>{capture={index:i,button:key};key.textContent='Press key…';notice.textContent='Press a shortcut. Escape cancels; Backspace removes it.';});
+      line.append(name,key);editors.append(line);
+    });
+    $('#add').disabled=draft.length>=10;$('#remove').disabled=draft.length<=1;
+  }
+  function edit(value=true){
+    editing=value;capture=null;form.hidden=!value;$('#settings').setAttribute('aria-expanded',String(value));
+    if(value){draft=clone().players;editorRows();$('select').value=clone().theme;notice.textContent=warning;requestAnimationFrame(clamp);}
+    else if(open)$('#settings').focus();
+  }
+  listen($('.launcher'),'click',()=>show(!open));listen($('#hide'),'click',()=>show(false));listen($('#clear'),'click',clear);
+  listen($('#settings'),'click',()=>edit(!editing));listen($('#cancel'),'click',()=>{edit(false);$('#settings').focus();});
+  listen($('#add'),'click',()=>{if(draft.length<10){capture=null;draft.push({name:'Player '+(draft.length+1),key:''});editorRows();clamp();}});
+  listen($('#remove'),'click',()=>{if(draft.length>1){capture=null;draft.pop();editorRows();}});
+  listen($('#reset-position'),'click',()=>{panel.style.left='12px';panel.style.top='72px';panel.style.width='216px';panel.style.height='auto';clamp();savePlacement();});
+  listen(form,'submit',event=>{event.preventDefault();try{const cfg=clone();cfg.players=draft;cfg.theme=$('select').value;model.configure(cfg);persist(true);render();edit(false);clamp();$('#settings').focus();}catch(error){notice.textContent=String(error.message);}});
+  listen(window,'keydown',event=>{
+    if(!open||event.repeat||event.isComposing)return;
+    if(capture){
+      if(['Control','Alt','Shift','Meta'].includes(event.key))return;
+      event.preventDefault();event.stopImmediatePropagation();
+      if(event.key==='Escape'){const index=capture.index;capture=null;editorRows();root.querySelectorAll('.binding')[index]?.focus();notice.textContent=warning;return;}
+      const key=event.key==='Backspace'?'':Core.eventKey(event);
+      if(event.key!=='Backspace'&&!key){notice.textContent='Unsupported or reserved shortcut. Try 1 or Num1.';return;}
+      const index=capture.index;draft[index].key=key;capture=null;editorRows();root.querySelectorAll('.binding')[index]?.focus();notice.textContent=warning;return;
+    }
+    const target=event.composedPath()[0];
+    // Closed recorder Shadow DOM hides internal typing targets from this window
+    // listener; another add-on owning focus must never lose its number keys.
+    if(['bl-replay-lab','bobble-wardrobe'].includes(document.activeElement?.id)||event.composedPath().some(el=>['bl-replay-lab','bobble-wardrobe'].includes(el?.id)))return;
+    if(event.key==='Escape'&&root.contains(target)){event.preventDefault();event.stopPropagation();if(editing)edit(false);else show(false);return;}
+    if(target?.isContentEditable||['INPUT','TEXTAREA','SELECT','BUTTON'].includes(target?.tagName)&&!root.contains(target))return;
+    if(['INPUT','TEXTAREA','SELECT'].includes(target?.tagName))return;
+    if(editing||event.ctrlKey&&event.altKey&&event.shiftKey&&event.key.toLowerCase()==='h')return;
+    const key=Core.eventKey(event),index=clone().players.findIndex(p=>p.key&&p.key===key);
+    if(index<0)return;
+    event.preventDefault();event.stopImmediatePropagation();toggle(index);
+  },{capture:true});
+  listen($('header'),'pointerdown',event=>{
+    if(event.button!==0||event.target.closest('button'))return;
+    const r=panel.getBoundingClientRect();drag={x:event.clientX-r.left,y:event.clientY-r.top,id:event.pointerId};$('header').setPointerCapture(event.pointerId);event.preventDefault();
+  });
+  listen($('header'),'pointermove',event=>{if(!drag||drag.id!==event.pointerId)return;panel.style.left=event.clientX-drag.x+'px';panel.style.top=event.clientY-drag.y+'px';clamp();});
+  listen($('header'),'pointerup',()=>{if(drag){drag=null;savePlacement();}});
+  listen($('header'),'pointercancel',()=>{drag=null;});listen(window,'resize',clamp);
+  listen(panel,'pointerdown',event=>{resizing=event.target===panel;});
+  listen(window,'pointerup',()=>{if(resizing){resizing=false;clamp();savePlacement();}},{passive:true});
+  const cfg=clone();if(cfg.position){panel.style.left=cfg.position.x+'px';panel.style.top=cfg.position.y+'px';}
+  if(cfg.size){panel.style.width=Math.max(190,cfg.size.width)+'px';panel.style.height=Math.max(152,cfg.size.height)+'px';}
+  render();(document.body||document.documentElement).append(host);
+  window.__bobblePowerTracker=Object.freeze({show,hide:()=>show(false),clear,state:()=>({...model.state(),open,editing}),
+    dispose(){if(disposed)return;disposed=true;abort.abort();host.remove();delete window.__bobblePowerTracker;return true;}});
+})();
+
+} catch(error) { window.__bobblePowerTrackerError=String(error); }
 // Bobble wardrobe: session-local cosmetics. Build-specific; no gameplay writes.
 (function(){ if(window.__bobbleWardrobe){window.__bobbleWardrobe.show();return;}
 
@@ -400,6 +626,59 @@ window.__bobbleClubCatalog=Object.freeze({
   Snowman:{name:'Snow Ballers',tag:'snow_ballers',supported:false}
 });
 
+// Supported-build, read-only ownership resolver. Club identity is not a side:
+// mirror matches and pooled visuals must be resolved through current team lists.
+(() => {
+  'use strict';
+  window.__bobbleResolveSkinTeam=function(P,targets){
+    const H=P.M.HEAP32,U=P.M.HEAPU8;
+    if(!H||!U)return null;
+    const ptr=(p,n=16)=>Number.isInteger(p)&&p>65536&&!(p&3)&&p+n<U.length;
+    const at=(p,off)=>H[(p+off)>>2];
+    const text=(p,s)=>p>0&&p+s.length<U.length&&[...s].every((c,i)=>U[p+i]===c.charCodeAt(0))&&U[p+s.length]===0;
+    const named=(p,s,ns)=>ptr(p,100)&&text(at(p,8),s)&&text(at(p,12),ns);
+    const list=p=>{
+      if(!ptr(p))return null;
+      const live=at(p,8);if(!ptr(live))return null;
+      const n=at(live,12),arr=at(live,8);
+      if(n<1||n>16||!ptr(arr,16+n*4)||at(arr,12)<n)return null;
+      const items=Array.from({length:n},(_,i)=>at(arr,16+i*4));return items.every(p=>ptr(p))?items:null;
+    };
+    const f=P.T.get(7471);if(!f||f.name!=='18429'||f.length!==2)return null;
+    const go=P.find('ClientGameContext'),ctx=go&&P.component(go,'GameContext_Shared');
+    if(!ptr(ctx,212)||!at(ctx,8)||!named(at(ctx,0),'GameContext_Shared','DiscordGames.CG6'))return null;
+    const relay=at(ctx,28),visuals=at(ctx,204);
+    if(!ptr(relay,40)||!at(relay,8)||!named(at(relay,0),'NetGameRelayContext','DiscordGames.ChannelGamesFramework.Session'))return null;
+    const game=at(relay,36);
+    if(!ptr(game,52)||!at(game,8)||!named(at(game,0),'NetGameRelay','DiscordGames.ChannelGamesFramework.Session')||at(game,48)!==relay)return null;
+    if(!ptr(visuals,96)||!at(visuals,8)||!named(at(visuals,0),'GameContext_ClientVisuals','DiscordGames.CG6')||at(visuals,60)!==ctx)return null;
+    const stack=P.M.stackSave();let side;
+    try{side=f(ctx,0);}finally{P.M.stackRestore(stack);}
+    if(side!==0&&side!==1)return null;
+    const clubById=['Bug','Hawk','Bear','Tiger','Pig','Bull','Dino','SnowMan'];
+    const club=clubById[at(ctx,side===0?44:48)];if(!club||club==='SnowMan')return null;
+    const teams=list(at(visuals,92));if(!teams||teams.length!==2)return null;
+    const roots=new Set(),opponents=new Set(),rootMap=new Map(targets.map(t=>[t.root,t]));
+    for(let team=0;team<2;team++){
+      const athletes=list(at(teams[team],8));if(!athletes)return null;
+      for(const athlete of athletes){
+        const bobble=at(athlete,8);if(!ptr(bobble,12)||!at(bobble,8))return null;
+        const bobbleObject=P.call('gameObject',bobble);if(!bobbleObject)return null;
+        let t=P.call('transform',bobbleObject);
+        // BallBobble may be below the named team root. Never infer side from
+        // world coordinates, club name, turn order or the root's numeric label.
+        for(let depth=0;t&&depth<12;depth++,t=P.call('parent',t)){
+          const target=rootMap.get(t);if(!target)continue;
+          if(team===side&&target.club!==club)return null;
+          (team===side?roots:opponents).add(t);break;
+        }
+      }
+    }
+    if(!roots.size||[...roots].some(root=>opponents.has(root)))return null;
+    return {club,roots};
+  };
+})();
+
 // Native adapter and UI-independent state machine. No gameplay writes.
 (() => {
   'use strict';
@@ -418,23 +697,18 @@ window.__bobbleClubCatalog=Object.freeze({
   let enabled=false,remember=false,disposed=false,error='',timer=0,busy=false;
   let started=Date.now(),everAttached=false,expired=false,storageWarning='';
   let assignments=Object.fromEntries(clubs.map(c=>[c,'original']));
-  let autoSkin='',autoClub='';
-  // Indexes are the verified NetGameCG6 club catalog order, not match sides.
-  const clubById=['Bug','Hawk','Bear','Tiger','Pig','Bull','Dino','SnowMan'];
+  let autoSkin='',autoClub='',autoRoots=new Set();
   function localClub(targets){
-    if(typeof window.__bobbleLocalClubTest==='function')return window.__bobbleLocalClubTest(targets);
-    const f=P.T.get(7471);if(!f||f.name!=='18429'||f.length!==2)return '';
-    const go=P.find('ClientGameContext'),ctx=go&&P.component(go,'GameContext_Shared');if(!ctx)return '';
-    const stack=P.M.stackSave();let team;try{team=f(ctx,0);}finally{P.M.stackRestore(stack);}
-    if(team!==0&&team!==1)return '';
-    const id=P.M.HEAP32[(ctx+(team===0?44:48))>>2];if(!Number.isInteger(id)||id<0||id>=clubById.length)return '';
-    const club=clubById[id];return clubs.includes(club)&&targets.some(t=>t.club===club)?club:'';
+    let resolved;
+    try{resolved=window.__bobbleResolveSkinTeam?.(P,targets);}catch{return '';}
+    if(!resolved||!clubs.includes(resolved.club))return '';
+    autoRoots=resolved.roots;return resolved.club;
   }
-  function wanted(club){return autoSkin&&club===autoClub?autoSkin:assignments[club];}
+  function wanted(target){return autoSkin?(target.club===autoClub&&autoRoots.has(target.root)?autoSkin:'original'):assignments[target.club];}
   const normalize=s=>({Hawks:'Hawk',Pigs:'Pig'}[s]||s);
   function save(){
     try{
-      if(remember)localStorage.setItem(storageKey,JSON.stringify({version:1,assignments}));
+      if(remember)localStorage.setItem(storageKey,JSON.stringify({version:1,assignments,autoSkin}));
       else localStorage.removeItem(storageKey);
       storageWarning='';
     }catch(e){storageWarning='Preferences could not be saved. This session still works.';}
@@ -443,6 +717,7 @@ window.__bobbleClubCatalog=Object.freeze({
     const saved=JSON.parse(localStorage.getItem(storageKey)||'null');
     if(saved?.version===1){
       remember=true;
+      if(registry.has(saved.autoSkin)){autoSkin=saved.autoSkin;enabled=true;}
       for(const club of clubs){
         if(saved.assignments?.[club]==='original'||registry.has(saved.assignments?.[club]))assignments[club]=saved.assignments[club];
         else if(saved.assignments?.[club]==='nebula')storageWarning='The retired skin was removed. Its clubs now use Original; your other assignments are unchanged.';
@@ -485,17 +760,17 @@ window.__bobbleClubCatalog=Object.freeze({
   function reconcile(){
     if(disposed||busy)return;busy=true;
     try{
-      if(enabled&&!everAttached&&Date.now()-started>1800000){enabled=false;expired=true;}
+      if(enabled&&!autoSkin&&!everAttached&&Date.now()-started>1800000){enabled=false;expired=true;}
       if(!enabled){restoreAll();return;}
-      const targets=scan(),roots=new Map(targets.map(t=>[t.root,t]));autoClub=autoSkin?localClub(targets):'';
+      const targets=scan(),roots=new Map(targets.map(t=>[t.root,t]));autoRoots=new Set();autoClub=autoSkin?localClub(targets):'';
       for(const [root,row]of [...attached]){
         const target=roots.get(root);
-        if(!target||target.club!==row.club||wanted(row.club)!==row.skin||['failed-restored','restore-error','expired'].includes(row.controller.status().phase))release(root);
+        if(!target||target.club!==row.club||wanted(target)!==row.skin||['failed-restored','restore-error','expired'].includes(row.controller.status().phase))release(root);
       }
       // A restore error blocks new native writes, rather than piling up swaps.
       if(error)return;
       for(const target of targets){
-        const skin=wanted(target.club);
+        const skin=wanted(target);
         if(skin==='original'||attached.has(target.root)||failures.has(target.root))continue;
         let controller;
         try{
@@ -534,7 +809,7 @@ window.__bobbleClubCatalog=Object.freeze({
     for(const club of clubs)assignments[club]=skin;
     failures.clear();save();reconcile();return state();
   }
-  function reset(){if(!restore())return false;autoSkin='';autoClub='';assignments=Object.fromEntries(clubs.map(c=>[c,'original']));failures.clear();save();notify();return true;}
+  function reset(){if(!restore())return false;autoSkin='';autoClub='';autoRoots.clear();assignments=Object.fromEntries(clubs.map(c=>[c,'original']));failures.clear();save();notify();return true;}
   function key(e){if(e.ctrlKey&&e.altKey&&e.shiftKey&&e.code==='KeyH'){e.preventDefault();restore();}}
   function dispose(){if(!restore())return false;disposed=true;clearInterval(timer);window.removeEventListener('keydown',key,true);listeners.clear();return true;}
   // Migrate only after all signatures/preflight have succeeded; never reload the activity.
@@ -547,7 +822,7 @@ window.__bobbleClubCatalog=Object.freeze({
   }
   window.addEventListener('keydown',key,true);
   timer=setInterval(reconcile,1200);
-  window.__bobbleWardrobeEngine=Object.freeze({clubs,state,setEnabled,assign,assignAll,restore,reset,auto(skin){if(skin&&!registry.has(skin))throw Error('Unknown skin');autoSkin=skin||'';autoClub='';failures.clear();reconcile();return state();},retry(){failures.clear();error='';reconcile();},
+  window.__bobbleWardrobeEngine=Object.freeze({clubs,state,setEnabled,assign,assignAll,restore,reset,auto(skin){if(skin&&!registry.has(skin))throw Error('Unknown skin');autoSkin=skin||'';autoClub='';autoRoots.clear();failures.clear();save();reconcile();return state();},retry(){failures.clear();error='';reconcile();},
     remember(value){remember=!!value;save();notify();},subscribe(fn){listeners.add(fn);fn(state());return()=>listeners.delete(fn);},
     previewData(id){return registry.get(id)?.data||null;},
     register(skin){
@@ -852,11 +1127,11 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
           <div class="view-tools"><button id="rotate-left" type="button" aria-label="Rotate model left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a7 7 0 1 1-1 8M6 3v5H1"/></svg></button><span>Drag to rotate</span><button id="rotate-right" type="button" aria-label="Rotate model right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a7 7 0 1 0 1 8M18 3v5h5"/></svg></button><button id="reset-view" type="button" aria-label="Reset model view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-7 8 7M7 8v12h10V8M10 20v-7h4v7"/></svg></button></div>
           <div class="skin-title"><h3 id="skin-name"></h3><span class="index" id="skin-index"></span></div><p class="description" id="skin-description"></p>
         </div>
-         <div class="assignment"><h3>Make it yours</h3><label class="field-label" for="skin-picker">Choose a skin</label><select id="skin-picker"></select><label class="field-label club-label" for="club">Apply to a club</label><select id="club"></select><p class="assigned" id="assigned"></p><button class="primary" id="apply" type="button">Use this skin</button><button class="secondary" id="original" type="button">Use original appearance</button><button class="link" id="apply-all" type="button">Use this skin for all clubs</button><hr class="divider"><label class="remember"><input id="remember" type="checkbox">Remember assignments on this device</label><p class="fine">Skins start off when the activity reloads. Saved club choices stay on this device.</p><div class="notice" id="notice" role="alert" hidden></div><button class="link" id="retry" type="button" hidden>Retry compatible bobbles</button></div>
+          <div class="assignment"><h3>Your match. Your style.</h3><label class="field-label" for="skin-picker">Skin</label><select id="skin-picker"></select><button class="primary" id="apply" type="button">Use on my team</button><p class="team-safety">Only your team. Opponents keep their original look.</p><hr class="divider"><label class="remember"><input id="remember" type="checkbox">Remember my choices on this device</label><p class="fine">Remembered auto-team skins turn on next time. Manual club overrides start off.</p><details class="club-overrides"><summary>Manual club overrides</summary><p class="fine">These target a club, not your side. Auto-team mode must be off.</p><label class="field-label club-label" for="club">Club</label><select id="club"></select><p class="assigned" id="assigned"></p><button class="secondary" id="apply-club" type="button">Use for selected club</button><button class="secondary" id="original" type="button">Restore selected club</button><button class="link" id="apply-all" type="button">Use for all clubs, including opponents</button></details><div class="notice" id="notice" role="alert" hidden></div><button class="link" id="retry" type="button" hidden>Retry compatible bobbles</button></div>
       </div><footer><p class="status" role="status" aria-live="polite"></p><p class="hints"><kbd>← →</kbd> browse · <kbd>Esc</kbd> close</p><div class="foot-actions"><button class="restore" id="restore" type="button">Restore all</button><button id="reset" type="button">Reset clubs</button></div></footer>
     </section>`;root.append(div);document.documentElement.append(host);
   const $=s=>root.querySelector(s),panel=$('section'),club=$('#club');
-  const autoControl=document.createElement('label');autoControl.className='remember';autoControl.style.margin='14px 0 4px';autoControl.innerHTML='<input id="auto-team" type="checkbox">Automatically use this skin for my team';$('#apply-all').after(autoControl);
+   const autoControl=document.createElement('label');autoControl.className='remember auto-team';autoControl.innerHTML='<input id="auto-team" type="checkbox">Auto-apply to my team';$('.team-safety').after(autoControl);
   const autoNote=document.createElement('p');autoNote.className='fine';autoNote.id='auto-team-note';autoControl.after(autoNote);
   $('canvas').setAttribute('aria-label','3D skin preview. Drag to rotate; Ctrl+scroll to zoom. J and L rotate; Home resets. Left and right arrows browse skins.');
   $('.view-tools span').textContent='Drag to rotate · Ctrl+scroll zoom';
@@ -877,7 +1152,22 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
   $('.collection').append(lab);
   $('#halo-label').textContent='Selection halo · preview only';
    const defaults=window.__bobbleAccentDefaults||{halo:'#19b9ce',arrow:'#f0aa42'};
-   accentStyle.textContent+=`.club-label{margin-top:18px}.accent-lab summary{cursor:pointer;font-size:13px;font-weight:600;min-height:36px;padding:8px 0}.accent-lab summary span{font-size:11px;font-weight:400;color:#526048;margin-left:8px}.accent-lab[open] summary{margin-bottom:12px}.accent-heading{display:none}.collection{align-self:stretch}.stage{height:clamp(260px,42dvh,360px)}.remember{font-size:12px;line-height:1.5}.remember input{width:16px;height:16px}.view-tools button{min-height:36px;min-width:36px}.close{min-height:40px;min-width:40px}@media(max-width:620px){.stage{height:290px}.collection{padding-bottom:12px}}`;
+   accentStyle.textContent+=`
+     :host{--ink:#283124;--muted:#526048;--edge:#c8d1bd;--leaf:#3e751a}input{caret-color:var(--leaf)}
+     header{padding:18px 24px}h2{font-size:26px;font-weight:500}.title p{margin-top:6px}
+     .assignment{padding:24px;background:#f5f7f0}.assignment h3{font-size:19px;font-weight:500;margin-bottom:22px}
+     .primary{margin-top:14px;min-height:44px}.team-safety{font-size:12px;line-height:1.5;color:var(--muted);margin:10px 0 16px}
+     .auto-team{padding:12px;background:#e5eddc;border:1px solid var(--edge);border-radius:5px;font-weight:600}.fine{line-height:1.6}
+     #auto-team-note{min-height:36px;margin:8px 0 0}.club-label{margin-top:12px}
+     .club-overrides{border-top:1px solid var(--edge);margin-top:20px;padding-top:10px}.club-overrides summary,.accent-lab summary{cursor:pointer;font-size:13px;font-weight:600;min-height:36px;padding:8px 0}
+     summary:focus-visible{outline:3px solid var(--leaf);outline-offset:3px}.club-overrides .fine{margin-bottom:14px}.club-overrides .link{line-height:1.5;white-space:normal;margin-top:8px}.assigned{margin-bottom:8px;min-height:0}.secondary{min-height:36px}
+     .accent-lab summary span{font-size:11px;font-weight:400;color:var(--muted);margin-left:8px}.accent-lab[open] summary{margin-bottom:12px}.accent-heading{display:none}
+     .collection{align-self:stretch}.stage{height:clamp(260px,42dvh,360px)}.skin-title h3{font-size:26px;font-weight:500}.description{line-height:1.6;max-width:45ch}
+     .remember{font-size:12px;line-height:1.5;cursor:pointer}.remember input{width:16px;height:16px}.view-tools button{min-height:36px;min-width:36px}.close{min-height:40px;min-width:40px}
+     footer{gap:12px}.status{line-height:1.5}.notice{margin-top:14px;line-height:1.6}
+     @media(max-width:620px){header{padding:14px 16px}.stage{height:250px}.collection{padding-bottom:14px}.assignment{padding:20px 18px}.assignment h3{margin-bottom:16px}h2{font-size:23px}.toggle-wrap{gap:0}.skin-title h3{font-size:24px}}
+     @media(max-height:500px) and (min-width:621px){.stage{height:225px}.collection{align-self:start}}
+   `;
   let accentDraft={...(window.__bobbleAccentSettings||defaults)};
   function syncAccents(){
     for(const [key,id]of [['halo','halo'],['arrow','aim']]){$('#'+id+'-color').value=accentDraft[key];$('#'+id+'-hex').textContent=accentDraft[key].toUpperCase();}
@@ -912,11 +1202,11 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
      $('#skin-picker').value=skin?.id||'';$('#skin-picker').disabled=!skin;
     for(const id of ['#previous','#next']){$(id).disabled=s.catalog.length<2;$(id).title=s.catalog.length<2?'One skin installed. More skins will appear here when added.':'';}
     $('.switch').setAttribute('aria-checked',String(s.enabled));$('.dot').classList.toggle('on',s.enabled);$('#remember').checked=s.remember;
-    $('#auto-team').checked=!!s.autoSkin;$('#auto-team').disabled=typeof engine.auto!=='function'||!skin;$('#auto-team-note').textContent=s.autoSkin?(s.autoClub?'Auto team: '+(catalog[s.autoClub]?.name||s.autoClub)+' · '+s.autoSkin:'Waiting to identify your supported club'):'Uses the displayed skin for your team; manual club choices remain unchanged.';
+     $('#auto-team').checked=!!s.autoSkin;$('#auto-team').disabled=typeof engine.auto!=='function'||!skin;$('#auto-team-note').textContent=s.autoSkin?(s.autoClub?'Your team: '+(catalog[s.autoClub]?.name||s.autoClub)+' · '+(s.catalog.find(x=>x.id===s.autoSkin)?.name||s.autoSkin):'Waiting for your team. No skin is applied until ownership is verified.'):'Choose Use on my team to equip the displayed skin. Manual overrides are separate.';
     const count=s.counts[club.value]||0,name=catalog[club.value]?.name||club.value;
     $('#assigned').textContent=count?name+' · '+count+' applied':(currentSkin?.name||'Original appearance')+(currentSkin?(s.enabled?' · waiting for a compatible bobble':' · skins off'):'');
-    $('#apply').disabled=!skin;$('#apply').textContent=current===skin?.id&&s.enabled?'Equipped for this club':'Use this skin';
-    $('#original').disabled=current==='original';$('#apply-all').disabled=!skin;
+     $('#apply').disabled=!skin;$('#apply').textContent=s.autoSkin===skin?.id&&s.enabled?(s.attached?'Equipped for my team':'Selected for my team'):'Use on my team';
+     $('#apply-club').disabled=!skin||!!s.autoSkin;$('#original').disabled=current==='original'||!!s.autoSkin;$('#apply-all').disabled=!skin||!!s.autoSkin;
     const message=s.error?'Restore needs attention':s.expired?'Waiting expired. Switch skins on to retry.':!s.enabled?'Original visuals · custom skins off':s.attached?s.attached+' custom bobble'+(s.attached===1?'':'s')+' applied':'Custom skins on · waiting for a match';
     if(message!==lastStatus){$('.status').textContent=message;lastStatus=message;}
     const notices=[s.error,s.storageWarning,...s.failures].filter(Boolean);$('#notice').hidden=!notices.length;$('#notice').textContent=notices.join('\n');$('#retry').hidden=!s.failures.length&&!s.error;
@@ -933,17 +1223,1036 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
   $('#reset-accents').addEventListener('click',()=>{accentDraft={...defaults};syncAccents();});
   $('#apply-accents').addEventListener('click',()=>{window.__bobbleAccentSettings={...accentDraft};syncAccents();$('#accent-state').textContent='Saved for this session · halo is preview-only';});
   syncAccents();
-  $('#apply').addEventListener('click',()=>{if(selected()){engine.assign(club.value,selected().id);if(!engine.state().enabled)engine.setEnabled(true);}});
+   $('#apply').addEventListener('click',()=>{if(selected()){engine.auto(selected().id);if(!engine.state().enabled)engine.setEnabled(true);}});
+   $('#apply-club').addEventListener('click',()=>{if(selected()&&!engine.state().autoSkin){engine.assign(club.value,selected().id);if(!engine.state().enabled)engine.setEnabled(true);}});
   $('#original').addEventListener('click',()=>engine.assign(club.value,'original'));$('#apply-all').addEventListener('click',()=>{if(selected()){engine.assignAll(selected().id);if(!engine.state().enabled)engine.setEnabled(true);}});
   $('#auto-team').addEventListener('change',e=>{engine.auto(e.target.checked?selected()?.id:'');if(e.target.checked&&!engine.state().enabled)engine.setEnabled(true);});
   $('.switch').addEventListener('click',()=>engine.setEnabled(!engine.state().enabled));$('#remember').addEventListener('change',e=>engine.remember(e.target.checked));$('#restore').addEventListener('click',()=>engine.restore());$('#reset').addEventListener('click',()=>engine.reset());$('#retry').addEventListener('click',()=>engine.retry());
   for(const event of ['pointerdown','pointerup','pointermove','click','dblclick','wheel','keyup'])root.addEventListener(event,e=>e.stopPropagation());
   root.addEventListener('keydown',e=>{if(e.code==='Escape'){e.preventDefault();show(false);}else if(!['SELECT','INPUT'].includes(e.target.tagName)&&['ArrowLeft','ArrowRight'].includes(e.code)){e.preventDefault();browse(e.code==='ArrowLeft'?-1:1);}e.stopPropagation();});
-  function key(e){if(e.ctrlKey&&e.altKey&&e.shiftKey&&e.code==='KeyW'){e.preventDefault();show(!open);}}
+   function key(e){if(e.key==='Escape'&&open&&[host,document.body,document.documentElement].includes(document.activeElement)){e.preventDefault();show(false);return;}if(e.ctrlKey&&e.altKey&&e.shiftKey&&e.code==='KeyW'){e.preventDefault();show(!open);}}
   window.addEventListener('keydown',key,true);const unsubscribe=engine.subscribe(update);
   function detachUI(){disposed=true;unsubscribe();window.removeEventListener('keydown',key,true);viewer?.dispose();host.remove();}
   window.__bobbleWardrobe=Object.freeze({show:()=>show(true),hide:()=>show(false),status:engine.state,preview:()=>viewer?.info(),detachUI,
     uninstall(){if(!engine.dispose())return false;detachUI();delete window.__bobbleWardrobe;delete window.__bobbleWardrobeEngine;delete window.__bobbleCreateVisual;delete window.__bobbleSkinAssets;return true;}});
 })();
 
+})();
+
+} catch(error) { window.__bobbleWardrobeBootError=String(error); }
+try { if(!window.__blReplay){
+// Read-only lifecycle and participant-eligibility adapter for the supported game
+// build. Internal roster/position validity checks reject stale pooled objects.
+// Only match phase and local participation are returned, never game positions,
+// opponent identity, aiming state, chat, voice, powers or network payloads.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.BLReplayReader = factory();
+})(typeof window === 'object' ? window : this, function () {
+  'use strict';
+  function createReader(getBuffer, clock) {
+    var shared = 0, scan = 65536, nextScan = 0, epoch = 0, priorKey = '', priorPhase = '', classHint = 28537368;
+    var participation = null;
+    clock = clock || function () { return performance.now(); };
+    function read() {
+      var buffer = getBuffer();
+      if (!buffer || !buffer.byteLength) return null;
+      var H = new Int32Array(buffer), F = new Float32Array(buffer), U = new Uint8Array(buffer), W = new Uint16Array(buffer);
+      function ptr(p, size) { return Number.isInteger(p) && p > 65536 && !(p & 3) && p + (size || 16) < buffer.byteLength; }
+      function text(p, s) {
+        if (!Number.isInteger(p) || p <= 0 || p + s.length + 1 >= buffer.byteLength) return false;
+        for (var i = 0; i < s.length; i++) if (U[p + i] !== s.charCodeAt(i)) return false;
+        return U[p + s.length] === 0;
+      }
+      function named(k, name, ns) { return ptr(k, 100) && text(H[(k + 8) >> 2], name) && text(H[(k + 12) >> 2], ns); }
+      function str(p) {
+        if (!ptr(p)) return null;
+        var n = H[(p + 8) >> 2];
+        if (n < 1 || n > 128 || p + 12 + n * 2 > buffer.byteLength) return null;
+        var s = ''; for (var i = 0; i < n; i++) s += String.fromCharCode(W[(p + 12) / 2 + i]);
+        return s;
+      }
+      function position(p, off) {
+        if (!ptr(p, off + 12)) return null;
+        var a = { x: F[(p + off) >> 2], y: F[(p + off + 4) >> 2], z: F[(p + off + 8) >> 2] };
+        return [a.x, a.y, a.z].every(Number.isFinite) && Math.abs(a.x) <= 60 && Math.abs(a.z) <= 60 && a.y >= -5 && a.y <= 30 ? a : null;
+      }
+      function lists(dg) {
+        if (!ptr(dg)) return [];
+        var all = [];
+        // +8 is the live list; +12 is the reusable pool, NEVER match evidence.
+        [8].forEach(function (off) {
+          var l = H[(dg + off) >> 2]; if (!ptr(l)) return;
+          var n = H[(l + 12) >> 2], arr = H[(l + 8) >> 2];
+          if (n < 1 || n > 16 || !ptr(arr, 16 + n * 4)) return;
+          var list = [];
+          for (var i = 0; i < n; i++) { var q = H[(arr + 16 + i * 4) >> 2]; if (ptr(q)) list.push(q); }
+          all.push(list);
+        });
+        return all;
+      }
+      function roster(q) {
+        var variants = lists(H[(q + 60) >> 2]);
+        for (var i = 0; i < variants.length; i++) {
+          if (variants[i].length !== 2) continue;
+          var athletes = [], scores = [], owners = [];
+          for (var team = 0; team < 2; team++) {
+            var tp = variants[i][team], choices = lists(H[(tp + 12) >> 2]), chosen = [];
+            scores.push(H[(tp + 8) >> 2]);
+            for (var j = 0; j < choices.length; j++) {
+              var bodies = [];
+              for (var k = 0; k < choices[j].length; k++) {
+                var ap = choices[j][k], id = H[(ap + 8) >> 2], pos = position(ap, 68), pid = str(H[(ap + 12) >> 2]);
+                if (id > 0 && pos && pid) bodies.push({ id: id, team: team, x: pos.x, y: pos.y, z: pos.z, owner: pid });
+              }
+              if (bodies.length) { chosen = bodies; break; }
+            }
+            chosen.forEach(function (a) { owners.push(a.owner); delete a.owner; athletes.push(a); });
+          }
+          if (athletes.some(function (a) { return a.team === 0; }) && athletes.some(function (a) { return a.team === 1; }) &&
+            scores.every(function (n) { return n >= 0 && n <= 100; })) return { athletes: athletes, score: scores, owners: owners };
+        }
+        return null;
+      }
+      function valid(q) {
+        // Plausible pooled/stale objects are NOT current-context evidence.
+        // Require live Unity components and the relay's CURRENT client-context
+        // slot, plus the client-visuals backlink. DestroyClientContext clears
+        // relay+48, so cached historical contexts fail this check on every read.
+        if (!ptr(q, 212)) return null;
+        var ctx = H[(q + 28) >> 2], visuals = H[(q + 204) >> 2];
+        if (!ptr(ctx, 40) || !H[(ctx + 8) >> 2] || !named(H[ctx >> 2], 'NetGameRelayContext', 'DiscordGames.ChannelGamesFramework.Session')) return null;
+        // NetGameRelayContext.Init stores netGameRelay at +36; +28 is FSMBehavior.
+        var game = H[(ctx + 36) >> 2];
+        if (!ptr(game, 52) || !H[(game + 8) >> 2] || !named(H[game >> 2], 'NetGameRelay', 'DiscordGames.ChannelGamesFramework.Session') || H[(game + 48) >> 2] !== ctx) return null;
+        if (!ptr(visuals, 64) || !H[(visuals + 8) >> 2] || !named(H[visuals >> 2], 'GameContext_ClientVisuals', 'DiscordGames.CG6') || H[(visuals + 60) >> 2] !== q) return null;
+        // Keep tracking the LIVE root after roster/ball teardown. Missing
+        // athletes cannot establish active participation, but must not conceal
+        // an actual GameOver property transition from an existing recording.
+        return H[q >> 2] === classHint && H[(q + 8) >> 2] !== 0;
+      }
+      if (!named(classHint, 'GameContext_Shared', 'DiscordGames.CG6')) return null;
+      var field = shared ? valid(shared) : null;
+      if (!field) {
+        shared = 0;
+        if (clock() < nextScan) return null;
+        nextScan = clock() + 100;
+        var end = Math.min(buffer.byteLength - 256, scan + (2 << 20));
+        for (var p = scan; p < end; p += 4) {
+          if (H[p >> 2] !== classHint) continue;
+          field = valid(p);
+          if (field) { shared = p; break; }
+        }
+        scan = end >= buffer.byteLength - 256 ? 65536 : end;
+        if (!shared) return null;
+      }
+      var identity = null;
+      // Exact chain recovered from GetLocalPlayersTeam; metadata verified every
+      // read, and local ID is used for eligibility only, never stored in footage.
+      var sessionKlass = H[2674088 >> 2];
+      if (named(sessionKlass, 'NetSession', 'DiscordGames.ChannelGamesFramework.Session')) {
+        var sf = H[(sessionKlass + 92) >> 2], session = ptr(sf) ? H[sf >> 2] : 0;
+        if (ptr(session, 80) && H[session >> 2] === sessionKlass) identity = str(H[(session + 76) >> 2]);
+      }
+      var winner = H[(shared + 72) >> 2], reason = H[(shared + 76) >> 2];
+      // Winner/reason can survive into the next match. Resolve the CURRENT
+      // property collection's actual game/phase state instead of guessing from
+      // those outcome fields. Dictionary<Type,PropertyCollectionBase> entries
+      // have 24-byte stride (8-byte type key), value at +16 in this build.
+      var phase = 'unknown', props = H[(shared + 40) >> 2], gameState = -1, gamePhase = -1;
+      if (ptr(props, 32)) {
+        var entries = H[(props + 12) >> 2], count = H[(props + 16) >> 2];
+        if (count >= 1 && count <= 32 && ptr(entries, 16 + count * 24) && H[(entries + 12) >> 2] >= count) {
+          for (var e = 0; e < count; e++) {
+            var entry = entries + 16 + e * 24;
+            if (H[entry >> 2] < 0) continue;
+            var value = H[(entry + 16) >> 2];
+            if (!ptr(value, 40)) continue;
+            var type = H[value >> 2];
+            if (named(type, 'SharedProps_GameFSM', 'DiscordGames.CG6')) gameState = H[(value + 32) >> 2];
+            // Nested IL2CPP types have an empty namespace; declaring type owns it.
+            if (named(type, 'SharedProps', '') && named(H[(type + 40) >> 2], 'GameState_InGame', 'DiscordGames.CG6')) gamePhase = H[(value + 32) >> 2];
+          }
+        }
+      }
+      if (gameState === 2 && [0, 1].includes(gamePhase)) phase = 'active';
+      if (gameState === 2 && gamePhase === 2 && [0, 1, 2].includes(winner) && [0, 1, 2].includes(reason)) phase = 'completed';
+      if ([0, 1].includes(gameState)) phase = 'idle';
+      // Ball and athlete objects are pooled/reset at completion. They are not
+      // session identity. The validated root/native handle/context anchor it.
+      var key = shared + ':' + H[(shared + 8) >> 2] + ':' + H[(shared + 28) >> 2];
+      if (key !== priorKey || ['completed', 'idle'].includes(priorPhase) && phase === 'active') epoch++;
+      priorKey = key; priorPhase = phase;
+      var context = key + ':' + epoch, liveField = roster(shared);
+      var ball = position(H[(shared + 64) >> 2], 60), role = 'unknown';
+      if (identity && liveField) role = liveField.owners.includes(identity) ? 'player' : 'spectator';
+      if (phase === 'active' && role === 'player' && ball) participation = { context: context, identity: identity, score: liveField.score.slice() };
+      // This is explicitly historical membership, NOT an unknown/spectator
+      // override during play. It applies only after the same root leaves play.
+      if (['completed', 'idle'].includes(phase) && identity && participation &&
+          participation.context === context && participation.identity === identity) role = 'former-player';
+       return { context: context, identity: identity || '', role: role,
+         phase: phase, winner: winner, endReason: reason };
+    }
+    return Object.freeze({ read: read });
+  }
+  return { createReader: createReader };
+});
+
+// Origin-private disk spool. Writes small encoded chunks, not whole videos in RAM.
+// Completion manifests are written ONLY after the recorder verifies match end.
+(function(root,factory){
+  if(typeof module==='object'&&module.exports)module.exports=factory();else root.BLVideoStore=factory();
+})(typeof window==='object'?window:this,function(){
+  'use strict';
+  function create(options){
+    options=options||{};var nav=options.navigator||navigator,cryptoAPI=options.crypto||crypto,dir,updates=new Map(),removed=new Set();
+    var state={ready:false,available:false,persistent:false,quota:0,usage:0,error:''};
+    var valid=id=>/^video-[a-f0-9-]{16,80}$/.test(id);
+    async function estimate(){try{var e=await nav.storage.estimate();state.quota=e.quota||0;state.usage=e.usage||0;}catch(_){}return status();}
+    function status(){return Object.assign({},state);}
+    async function ownerKey(owner){return Array.from(new Uint8Array(await cryptoAPI.subtle.digest('SHA-256',new TextEncoder().encode('bobble-local-video-owner/1:'+owner)))).map(v=>v.toString(16).padStart(2,'0')).join('');}
+    var ready=(async()=>{
+      try{dir=await (await nav.storage.getDirectory()).getDirectoryHandle('bobble-recorder-v1',{create:true});state.available=true;try{state.persistent=!!(nav.storage.persisted&&await nav.storage.persisted());}catch(_){}await estimate();}
+      catch(e){state.error='Disk recording unavailable. '+(e.message||e.name||'Storage access denied.');}
+      state.ready=true;return status();
+    })();
+    async function remove(id){if(!valid(id))throw Error('Invalid recording ID.');removed.add(id);await ready;if(!dir)return;await updates.get(id)?.catch(()=>{});await dir.removeEntry(id+'.webm').catch(e=>{if(e.name!=='NotFoundError')throw e;});await dir.removeEntry(id+'.json').catch(e=>{if(e.name!=='NotFoundError')throw e;});await estimate();}
+    async function writeManifest(record,owner){
+      var data=Object.assign({},record,{version:1,ownerKey:await ownerKey(owner)});delete data.blob;delete data.owner;delete data.context;
+      var handle=await dir.getFileHandle(record.id+'.json',{create:true}),writer=await handle.createWritable();
+      try{await writer.write(JSON.stringify(data));await writer.close();}catch(e){await writer.abort().catch(()=>{});throw e;}
+    }
+    function manifest(record,owner){
+      if(!valid(record.id)||removed.has(record.id))return Promise.reject(Error('Recording was removed.'));
+      var task=(updates.get(record.id)||Promise.resolve()).catch(()=>{}).then(()=>writeManifest(record,owner));
+      updates.set(record.id,task);task.finally(()=>{if(updates.get(record.id)===task)updates.delete(record.id);}).catch(()=>{});return task;
+    }
+    async function open(){
+      await ready;if(!state.available)throw Error(state.error||'Disk storage unavailable.');
+      var id='video-'+cryptoAPI.randomUUID(),handle=await dir.getFileHandle(id+'.webm',{create:true}),writer=await handle.createWritable();
+      var chain=Promise.resolve(),queued=0,peak=0,bytes=0,closed=false,failed=null;
+      return {
+        id:id,
+        append(blob){
+          if(closed||failed)return Promise.reject(failed||Error('Recording spool is closed.'));
+          if(queued+blob.size>32*1048576)return Promise.reject(Error('Disk cannot keep up with recording (32 MB queue).'));
+          queued+=blob.size;peak=Math.max(peak,queued);
+          var write=chain.then(async()=>{if(failed)throw failed;await writer.write(blob);bytes+=blob.size;}).catch(e=>{failed=e;throw e;}).finally(()=>{queued-=blob.size;});
+          chain=write.catch(()=>{});return write;
+        },
+        stats:()=>({queuedBytes:queued,peakQueuedBytes:peak,bytes:bytes}),
+        async finish(record,owner){
+          if(closed)throw Error('Recording spool is closed.');closed=true;await chain;if(failed){await writer.abort().catch(()=>{});throw failed;}
+          await writer.close();var blob=await handle.getFile();record.id=id;record.disk=true;
+          if(blob.size<100)throw Error('Disk recording is empty.');
+          var warning='';try{await manifest(record,owner);}catch(e){warning='Recovery metadata could not be saved. Download this completed video before closing: '+e.message;}
+          await estimate();return {blob:blob,id:id,recoveryWarning:warning};
+        },
+        async abort(){if(closed)return;closed=true;await chain;await writer.abort().catch(()=>{});await remove(id);}
+      };
+    }
+    async function load(owner){
+      await ready;if(!state.available)return [];
+      var key=await ownerKey(owner),records=[],scanned=0;
+      for await(var [name,entry] of dir.entries()){
+        if(++scanned>2000||records.length>=500)break;
+        if(entry.kind!=='file'||!name.endsWith('.json')||!valid(name.slice(0,-5)))continue;
+        try{
+          var file=await entry.getFile();if(file.size>1048576)continue;
+          var r=JSON.parse(await file.text());
+          if(r.version!==1||r.ownerKey!==key||r.id!==name.slice(0,-5)||r.disk!==true||!Number.isFinite(r.duration)||r.duration<=0||r.duration>86400||!Number.isFinite(r.created)||!Array.isArray(r.marks)||!Array.isArray(r.warnings)||![r.width,r.height].every(n=>Number.isInteger(n)&&n>0&&n<=16384))continue;
+          var blob=await (await dir.getFileHandle(r.id+'.webm')).getFile();if(blob.size<100)continue;
+          // Explicit fields only. A local manifest is data, never an object to trust.
+          records.push({id:r.id,title:String(r.title||'Recovered match').slice(0,80),file:'bobble-'+r.id,blob:blob,disk:true,owner:owner,context:'recovered',created:r.created,duration:r.duration,
+            marks:r.marks.filter(m=>m&&Number.isFinite(m.t)&&m.t>=0&&m.t<=r.duration).slice(0,1000).map(m=>({t:m.t,label:String(m.label||'Moment').slice(0,80)})),
+            warnings:r.warnings.slice(0,20).map(w=>String(w).slice(0,200)),fps:[24,30,60].includes(r.fps)?r.fps:30,width:r.width,height:r.height,mime:'video/webm',partial:true,autoDownload:false,downloaded:r.downloaded===true});
+        }catch(_){} // Corrupt/interrupted files are never promoted into completed videos.
+      }
+      return records.sort((a,b)=>b.created-a.created);
+    }
+    return Object.freeze({ready:ready,status:status,estimate:estimate,open:open,load:load,remove:remove,update:manifest,
+      async persist(){await ready;try{state.persistent=!!(nav.storage.persist&&await nav.storage.persist());}catch(_){}return status();}});
+  }
+  return {create:create};
+});
+
+// Real canvas pixels -> MediaRecorder -> WebM. No scene renderer or physics.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.BLVideoRecorder = factory();
+})(typeof window === 'object' ? window : this, function () {
+  'use strict';
+  function create(options) {
+    var now = options.now || function () { return performance.now(); };
+    var Recorder = options.MediaRecorder || MediaRecorder;
+    var armed = false, pending = null, library = [], sample = null, lastRead = -Infinity;
+    var state = 'idle', message = 'Arm to record actual game video.', lastError = '', sequence = 0, disposed = false, blockedContext = null;
+    var settings = { fps: 30, mbps: 1, maxMB: 256, autoDownload: false };
+    var MAX_TOTAL = 512 * 1024 * 1024, HOLD = 2000, MISSING = 5000;
+    var store=options.storage||null, recovered=new Set(), loading=0, committing=0;
+    var revision=0,cachedOwner=null,cachedRevision=-1,cachedSummaries=[];
+    function changed(){revision++;}
+    function summaries(owner){
+      if(cachedOwner!==owner||cachedRevision!==revision){cachedOwner=owner;cachedRevision=revision;cachedSummaries=Object.freeze(library.filter(r=>r.owner===owner).map(function(r){var s=summary(r);s.marks=Object.freeze(s.marks.map(Object.freeze));s.warnings=Object.freeze(s.warnings);return Object.freeze(s);}));}
+      return cachedSummaries;
+    }
+    var DISK_TOTAL=8*1024*1024*1024;
+    function disk(){return !!store&&store.status().available;}
+    function totalLimit(){return disk()?DISK_TOTAL:MAX_TOTAL;}
+    function recover(owner){
+      if(!store||recovered.has(owner))return;recovered.add(owner);loading++;
+      store.load(owner).then(function(rows){if(disposed)return;var ids=new Set(library.map(r=>r.id));rows.forEach(function(r){if(!ids.has(r.id))library.push(r);});library.sort((a,b)=>b.created-a.created);changed();}).catch(function(e){lastError='Could not recover disk recordings: '+e.message;recovered.delete(owner);}).finally(function(){loading--;});
+    }
+    function supportedMime() {
+      return ['video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'].find(function (m) { return Recorder.isTypeSupported(m); });
+    }
+    function member(s) { return s && typeof s.identity === 'string' && s.identity.length > 0 && typeof s.context === 'string'; }
+    function active(s) { return member(s) && s.phase === 'active' && s.role === 'player'; }
+    function post(s) { return member(s) && ['completed', 'idle'].includes(s.phase) && ['player', 'former-player'].includes(s.role); }
+    function outcome(s) { return s.phase === 'completed' && [0, 1, 2].includes(s.winner) && [0, 1, 2].includes(s.endReason); }
+    function fresh() { var dt = now() - lastRead; return dt >= 0 && dt <= 1500; }
+    function allowed() {
+      return fresh() && post(sample) && !pending && library.some(function (r) { return r.owner === sample.identity; });
+    }
+    function tracksStop(p) {
+      if (p.stream) p.stream.getTracks().forEach(function (t) { try { t.stop(); } catch (_) {} });
+    }
+    function discard(reason) {
+      var p = pending; pending = null;
+      if (p) blockedContext = p.context;
+      if (p) { p.cancelled = true; p.chunks = [];clearTimeout(p.openTimer); if(p.sink)p.sink.abort().catch(function(e){lastError='Temporary disk cleanup failed: '+e.message;}); if (p.media && p.media.state !== 'inactive') p.media.stop(); tracksStop(p); }
+      state = 'warning'; message = reason; lastError = reason;
+    }
+    function bytesUsed() { return library.reduce(function (n, r) { return n + r.blob.size; }, 0); }
+    function finish() {
+      var p = pending;
+      if (!p || p.committing || !p.end || !p.stopped || now() - p.endAt < HOLD || !fresh() || !post(sample) ||
+          sample.context !== p.context || sample.identity !== p.owner) return;
+      if ((!p.sink&&!p.chunks.length) || p.bytes < 100) { discard('The encoder produced no video. Check canvas capture support.'); return; }
+      var blob = p.sink?null:new Blob(p.chunks, { type: p.mime });
+      if (bytesUsed() + p.bytes > totalLimit() || library.length >= (disk()?500:10)) {
+        discard('Recording library is full. Download/delete an older video before the next match.'); return;
+      }
+      var stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      var row={ id: 'video-' + (++sequence), title: 'Match ' + sequence, file: 'bobble-' + stamp,
+        blob: blob, owner: p.owner, context: p.context, created: Date.now(), duration: p.duration,
+        marks: p.marks.filter(function (m) { return m.t <= p.duration; }), fps: p.fps,
+        width: p.width, height: p.height, mime: p.mime, warnings: p.warnings.slice(), partial: p.partial,
+        autoDownload: settings.autoDownload, downloaded: false, disk:!!p.sink };
+      p.chunks = []; pending = null;blockedContext=p.context;
+      if(p.sink){
+        p.committing=true;committing++;state='finalizing';message='Saving the verified recording to local disk…';
+        p.sink.finish(row,p.owner).then(function(result){row.blob=result.blob;row.id=result.id;if(result.recoveryWarning){row.warnings.push(result.recoveryWarning);lastError=result.recoveryWarning;}if(!disposed){library.unshift(row);changed();}}).catch(function(e){lastError='Disk finalization failed: '+e.message;state='warning';message=lastError;}).finally(function(){committing--;});
+      }else{library.unshift(row);changed();}
+      if(!p.sink){state = 'ready'; message = 'Actual game video is ready. Select it to watch or save.';}
+    }
+    function stopPartial(reason){
+      var p=pending;if(!p||p.captureStopped)return;p.captureStopped=true;p.duration=Math.max(0,((p.lastChunkAt||p.started)-p.started)/1000);p.warnings.push(reason);p.warnings.push('Partial capture: the final fragment may be incomplete. Save and verify the video.');lastError=reason;
+      state='paused';message=reason+' Capture stopped; keeping the partial video locked until verified match completion.';
+      if(p.media.state!=='inactive')p.media.stop();
+    }
+    function stopAtEnd(s) {
+      var p = pending;
+      if (!p.end) {
+        p.end = { winner: s.winner, reason: s.endReason };
+        p.endAt = now(); if(!p.captureStopped)p.duration = Math.max(0, (now() - p.started) / 1000);
+        state = 'finalizing'; message = 'Match finished. Finalizing the video…';
+        if (p.media.state !== 'inactive') p.media.stop();
+      } else if (s.phase === 'completed' && (p.end.winner !== s.winner || p.end.reason !== s.endReason)) {
+        discard('Result changed during verification. Video stays unavailable.'); return;
+      }
+      finish();
+    }
+    function start(s) {
+      if(store&&!store.status().ready){state='checking';message='Preparing local disk storage…';return;}
+      if (library.length >= (disk()?500:10) || bytesUsed() > totalLimit() - 1024 * 1024) {
+        state = 'warning'; message = 'Library full. Download/delete a video before recording another match.'; return;
+      }
+      var canvas = options.canvas(), mime = supportedMime();
+      if (!canvas || typeof canvas.captureStream !== 'function' || !canvas.width || !canvas.height) throw Error('Game canvas capture is unavailable.');
+      if (!mime) throw Error('This client has no supported WebM encoder.');
+      var stream = canvas.captureStream(settings.fps), p = {
+        context: s.context, owner: s.identity, started: now(), chunks: [], bytes: 0,
+        marks: [], warnings: [], fps: settings.fps, width: canvas.width, height: canvas.height,
+        mime: mime, stream: stream, stopped: false, end: null, endAt: 0, cancelled: false,
+        partial: true, duration: 0, missingSince: null, lastAt: now(), sink:null, initializing:false, queuedBytes:0, peakQueuedBytes:0, captureStopped:false
+      };
+      try {
+        if (!stream.getVideoTracks().length) throw Error('Game canvas did not provide a video track.');
+        // Canvas capture is video-only. Never tap microphone or Discord audio.
+        stream.getAudioTracks().forEach(function (t) { stream.removeTrack(t); t.stop(); });
+        p.media = new Recorder(stream, { mimeType: mime, videoBitsPerSecond: settings.mbps * 1000000 });
+        p.media.ondataavailable = function (e) {
+          if (p.cancelled || p.captureStopped || disposed || pending !== p || !e.data || !e.data.size) return;
+          if (p.bytes+e.data.size > (p.sink?DISK_TOTAL:settings.maxMB * 1024 * 1024) || p.bytes+e.data.size + bytesUsed() > totalLimit()) {
+            stopPartial(p.sink?'Local disk budget reached.':'Memory fallback limit reached.'); return;
+          }
+          if(p.sink){
+            if(p.queuedBytes+e.data.size>32*1048576){stopPartial('Disk writes are too slow; the 32 MB queue is full.');return;}
+            p.queuedBytes+=e.data.size;p.peakQueuedBytes=Math.max(p.peakQueuedBytes,p.queuedBytes);
+            p.sink.append(e.data).catch(function(err){if(pending===p)discard('Disk write failed. Unfinished video cannot be released: '+err.message);}).finally(function(){p.queuedBytes-=e.data.size;});
+          }else p.chunks.push(e.data);
+          p.bytes+=e.data.size;
+          p.lastChunkAt=now();
+        };
+        p.media.onerror = function () { if (pending === p) discard('Video encoder failed. No replay released.'); };
+        p.media.onstop = function () {
+          p.stopped = true; tracksStop(p);
+          if (p.cancelled || disposed || pending !== p) return;
+          if (!p.end&&!p.captureStopped) { discard('Video capture stopped before match completion. No replay released.'); return; }
+          finish();
+        };
+        stream.getVideoTracks().forEach(function (track) {
+          track.onended = function () { if (pending === p && !p.end) discard('Game video source ended before match completion.'); };
+          track.onmute = function () {
+            if (pending === p && !p.warnings.includes('Source was suspended; video may contain frozen frames.')) p.warnings.push('Source was suspended; video may contain frozen frames.');
+          };
+        });
+        pending = p;
+        function begin(){if(pending!==p||disposed||p.cancelled)return;p.initializing=false;p.started=now();p.media.start(1000);state='recording';message='Recording actual game video. Playback unlocks after match end.';lastError='';}
+        if(disk()){
+          p.initializing=true;state='checking';message='Opening local disk recording…';
+          p.openTimer=setTimeout(function(){if(pending===p&&p.initializing)discard('Disk recording did not open within 15 seconds. Free disk space or check storage permissions, then re-arm.');},15000);
+          store.open().then(function(sink){if(pending!==p||disposed||p.cancelled){sink.abort().catch(()=>{});return;}p.sink=sink;begin();}).catch(function(e){if(pending===p)discard('Cannot open disk recording: '+e.message);}).finally(function(){clearTimeout(p.openTimer);});
+        }else{if(store)p.warnings.push('Memory-only fallback: unsaved video is lost when the activity closes.');begin();}
+      } catch (e) { tracksStop(p); throw e; }
+    }
+    function observe(s) {
+      if (disposed) return;
+      var t = now(), delta = t - lastRead;
+      if (!Number.isFinite(t) || delta < 0) { sample = null; discard('Clock changed. Pending video discarded.'); return; }
+      sample = s; lastRead = t;
+      if(member(s))recover(s.identity);
+      if (!s || !member(s) || !['active', 'completed', 'idle'].includes(s.phase)) {
+        if (pending) {
+          if (pending.missingSince == null) pending.missingSince = t;
+          state = pending.captureStopped?'paused':'checking'; message = pending.captureStopped?lastError+' Partial video stays locked until verified match completion.':'Checking match status. Video remains locked.';
+          if (t - pending.missingSince > MISSING&&!pending.end) {
+            if(pending.initializing)discard('Match status was lost before disk recording opened.');
+            else stopPartial('Match status unavailable for 5 seconds. Capture stopped; prior footage is retained but locked.');
+          }
+        } else { state = armed ? 'waiting' : 'idle'; message = armed ? 'Armed. Waiting for a participant match.' : 'Arm to record actual game video.'; }
+        return;
+      }
+      if (pending) {
+        var p = pending;
+        if (s.context !== p.context || s.identity !== p.owner) { discard('Match or account changed before release. Pending video discarded.'); return; }
+        if (s.phase === 'active' && !active(s) || s.phase !== 'active' && !post(s)) { discard('Participation could not be verified. Pending video discarded.'); return; }
+        if (s.phase === 'active') {
+          if (p.end) { discard('Game resumed before verified completion. No replay released.'); return; }
+          if (delta > 1500 || p.missingSince != null) {
+            if (!p.warnings.includes('Background sampling gap; video may contain frozen frames.')) p.warnings.push('Background sampling gap; video may contain frozen frames.');
+          }
+          p.missingSince = null; state = p.initializing?'checking':p.captureStopped?'paused':'recording'; message = p.initializing?'Opening local disk recording…':p.captureStopped?lastError+' Partial video stays locked until verified match completion.':'Recording actual game video. Playback unlocks after match end.';
+          return;
+        }
+        p.missingSince = null;
+        if(p.initializing){discard('Match ended before disk recording could start.');return;}
+        if (outcome(s)) stopAtEnd(s);
+        else if (s.phase === 'idle' && p.end) { state = 'finalizing'; message = 'Finalizing completed video…'; finish(); }
+        else discard('Match left play without an observed GameOver. Video was not released.');
+        return;
+      }
+      if (active(s) && armed && s.context !== blockedContext) {
+        try { start(s); } catch (e) { armed = false; discard('Cannot start video capture: ' + e.message); }
+      } else if (active(s) && armed && s.context === blockedContext) {
+        state = 'warning'; message = lastError + ' Disarm/re-arm to start a new partial capture, or wait for the next match.';
+      } else if (s.phase === 'active') {
+        state = s.role === 'spectator' ? 'ineligible' : 'idle';
+        message = s.role === 'spectator' ? 'Spectator recording is disabled.' : 'Recorder is off. Live playback remains locked.';
+      } else if(committing){state='finalizing';message='Saving the verified recording to local disk…';}
+      else if (allowed()) { state = 'ready'; message = 'Completed videos are ready. Select a recording.'; }
+      else { state = armed ? 'waiting' : 'idle'; message = armed ? 'Armed. Waiting for a participant match.' : 'Arm to record actual game video.'; }
+    }
+    function find(id) {
+      if (!allowed()) throw Error('Viewing and saving video are locked until verified match completion.');
+      var r = library.find(function (item) { return item.id === id && item.owner === sample.identity; });
+      if (!r) throw Error('Recording not found.');
+      return r;
+    }
+    function summary(r) {
+      return { id: r.id, title: r.title, duration: r.duration, bytes: r.blob.size, created: r.created,
+        marks: r.marks.map(function (m) { return { t: m.t, label: m.label }; }),
+        fps: r.fps, width: r.width, height: r.height, warnings: r.warnings.slice(),
+        partial: r.partial, autoDownload: r.autoDownload, downloaded: r.downloaded, disk:r.disk===true };
+    }
+    return Object.freeze({
+      observe: observe,
+      arm: function (v) { armed = v !== false; if (!armed && pending) discard('Recording stopped early. Pending video discarded.'); if (armed) {blockedContext = null;if(store)store.persist().catch(()=>{});} return armed; },
+      configure: function (prefs) {
+        if (pending) throw Error('Change capture quality before the next recording.');
+        if(prefs.fps!==undefined&&![24,30,60].includes(prefs.fps)||prefs.mbps!==undefined&&![0.6,1,2,3,6,12].includes(prefs.mbps)||prefs.maxMB!==undefined&&![128,256,384].includes(prefs.maxMB))throw Error('Choose supported frame rate, quality and memory presets.');
+        if (prefs.fps !== undefined) { if (![24, 30, 60].includes(prefs.fps)) throw Error('Choose 24, 30 or 60 FPS.'); settings.fps = prefs.fps; }
+        if (prefs.mbps !== undefined) { settings.mbps = prefs.mbps; }
+        if (prefs.maxMB !== undefined) { if (![128, 256, 384].includes(prefs.maxMB)) throw Error('Choose a supported memory limit.'); settings.maxMB = prefs.maxMB; }
+        if (prefs.autoDownload !== undefined) settings.autoDownload = prefs.autoDownload === true;
+        return Object.assign({}, settings);
+      },
+      mark: function (label) {
+        if (!pending || pending.end || pending.initializing || pending.captureStopped || !fresh() || !active(sample) || pending.marks.length >= 1000) return false;
+        var t = Math.max(0, (now() - pending.started) / 1000);
+        if (pending.marks.length && t - pending.marks[pending.marks.length - 1].t < .3) return false;
+        pending.marks.push({ t: t, label: String(label || 'Marked moment').slice(0, 80) }); return true;
+      },
+      status: function () {
+        return { kind: 'real-video', armed: armed, state: state, message: message, canView: allowed(),
+          live: !!sample && sample.phase === 'active', role: sample ? sample.role : 'unknown',
+          capturedSeconds: pending ? Math.max(0, Math.floor((pending.end||pending.captureStopped ? pending.duration : pending.initializing?0:(now() - pending.started) / 1000))) : 0,
+          bytes: pending ? pending.bytes : 0, chunks: pending ? pending.chunks.length : 0,
+          marks: pending ? pending.marks.length : 0, totalBytes: bytesUsed(), savedCount: library.length,
+          lastError: lastError, warnings: pending ? pending.warnings.slice() : [],
+          storage:store?store.status():{ready:true,available:false,persistent:false},recovering:loading>0,finalizing:committing>0,
+          memoryBytes:pending?(pending.sink?pending.queuedBytes:pending.bytes):0,peakQueuedBytes:pending?pending.peakQueuedBytes:0,totalLimit:totalLimit(),
+          estimatedRemainingSeconds:Math.max(0,Math.floor(Math.min(totalLimit()-bytesUsed()-(pending?pending.bytes:0),disk()?(store.status().quota?Math.max(0,store.status().quota-store.status().usage-(pending?pending.bytes:0)-128*1048576):Infinity):settings.maxMB*1048576-(pending?pending.bytes:0))*8/(settings.mbps*1000000))),
+          revision:revision,settings: Object.assign({}, settings), recordings: allowed() ? summaries(sample.identity) : [] };
+      },
+      recording: function (id) { var r = find(id); return Object.assign(summary(r), { blob: r.blob, file: r.file }); },
+      rename: function (id, title) { var r = find(id); r.title = String(title).trim().slice(0, 80) || r.title;changed();if(r.disk)store.update(r,r.owner).catch(e=>{lastError='Title was not saved to disk: '+e.message;}); },
+      downloaded: function (id) { var r=find(id);r.downloaded = true;changed();if(r.disk)store.update(r,r.owner).catch(e=>{lastError='Download status was not saved: '+e.message;}); },
+      metadata: function (id) {
+        var r = find(id);
+        return { format: 'bobble-video-moments/1', title: r.title, duration: r.duration, width: r.width, height: r.height,
+          fps: r.fps, audio: false, partial: true, warnings: r.warnings.slice(),
+          marks: r.marks.map(function (m) { return { t: m.t, label: m.label }; }) };
+      },
+      remove: async function (id) { var r=find(id);if(r.disk)await store.remove(id);library = library.filter(function (r) { return r.id !== id; });changed(); },
+      dispose: function () { disposed = true; if (pending) discard('Recorder closed.'); library = [];changed();cachedSummaries=[]; armed = false; sample = null; }
+    });
+  }
+  return { create: create };
+});
+
+// Seekable WebM metadata for the MediaRecorder format. Runs in a worker: encoded
+// frames are never decoded, copied to canvases, or regenerated here.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(); else root.BLVideoIndex = factory();
+})(typeof window === 'object' ? window : this, function () {
+  'use strict';
+  function workerMain() {
+    async function index(blob, seconds) {
+      var cache = new Uint8Array(0), cacheAt = -1;
+      async function bytes(at, count) {
+        if (at < 0 || at + count > blob.size) throw Error('Truncated WebM.');
+        if (at < cacheAt || at + count > cacheAt + cache.length) { cacheAt = at; cache = new Uint8Array(await blob.slice(at, Math.min(blob.size, at + Math.max(1048576, count))).arrayBuffer()); }
+        return cache.subarray(at - cacheAt, at - cacheAt + count);
+      }
+      function vint(a, at, keep) {
+        var n = 1, mask = 128; while (n <= 8 && !(a[at] & mask)) { n++; mask >>= 1; }
+        if (n > 8 || at + n > a.length) throw Error('Invalid EBML header.');
+        var value = keep ? a[at] : a[at] & (mask - 1), unknown = !keep && value === mask - 1;
+        for (var i = 1; i < n; i++) { value = value * 256 + a[at + i]; unknown = unknown && a[at + i] === 255; }
+        return { n:n, value:value, unknown:unknown };
+      }
+      async function element(at) {
+        var a = await bytes(at, Math.min(16, blob.size - at)), id = vint(a, 0, true), size = vint(a, id.n, false), data = at + id.n + size.n;
+        if (!size.unknown && data + size.value > blob.size) throw Error('Truncated EBML element.');
+        return { id:id.value, at:at, data:data, end:size.unknown ? null : data + size.value };
+      }
+      function uint(n) { var a = []; do { a.unshift(n % 256); n = Math.floor(n / 256); } while (n); return new Uint8Array(a); }
+      function size(n) {
+        var len = 1; while (n >= Math.pow(2, 7 * len) - 1) len++;
+        var a = new Uint8Array(len); for (var i = len - 1; i >= 0; i--) { a[i] = n % 256; n = Math.floor(n / 256); } a[0] |= 1 << (8 - len); return a;
+      }
+      function concat(parts) { var n = parts.reduce(function (v, a) { return v + a.length; }, 0), out = new Uint8Array(n), at = 0; parts.forEach(function (a) { out.set(a,at); at += a.length; }); return out; }
+      function el(id, data) { return concat([uint(id),size(data.length),data]); }
+      function val(id, n) { return el(id,uint(n)); }
+      var ebml = await element(0); if (ebml.id !== 0x1a45dfa3 || !ebml.end) throw Error('Not a MediaRecorder WebM.');
+      var segment = await element(ebml.end); if (segment.id !== 0x18538067) throw Error('Missing WebM segment.');
+      var at = segment.data, prefix = [], clusters = [], scale = 1000000, videoTrack = 1, scanned = 0;
+      while (at < blob.size) {
+        var e = await element(at);
+        if (e.id === 0x1f43b675) {
+          var cursor = e.data, tick = 0, key = false,hasTick=false;
+          while (cursor < (e.end || blob.size)) {
+            var child = await element(cursor);
+            if ([0x1f43b675,0x1c53bb6b,0x1549a966,0x1654ae6b,0x114d9b74,0x1254c367].includes(child.id)) break;
+            if (!child.end) throw Error('Unsupported unknown-sized cluster child.');
+            if (child.id === 0xe7) { var t = await bytes(child.data,child.end-child.data); tick = Array.from(t).reduce(function (n,v) { return n * 256 + v; },0);hasTick=true; }
+            if (child.id === 0xa3) { var block = await bytes(child.data,Math.min(12,child.end-child.data)), track = vint(block,0,false); if (track.value === videoTrack && block[track.n + 2] & 128) key = true; }
+            if (child.id === 0xa0) {
+              var gp = child.data, referenced = false, video = false;
+              while (gp < child.end) {
+                var g = await element(gp); if (!g.end) throw Error('Invalid block group.');
+                if (g.id === 0xfb) referenced = true;
+                if (g.id === 0xa1) { var head = await bytes(g.data,Math.min(12,g.end-g.data)); video = vint(head,0,false).value === videoTrack; }
+                gp = g.end;
+              }
+              if (video && !referenced) key = true;
+            }
+            cursor = child.end;
+            if(e.end&&key&&hasTick){cursor=e.end;break;} // Sized cluster: no need to read every encoded frame header.
+          }
+          var end = e.end || cursor; clusters.push({ at:e.at, end:end, time:tick, key:key }); at = end;
+        } else {
+          if (!e.end) throw Error('Unsupported unknown-sized WebM metadata.');
+          if (e.id === 0x1549a966) {
+            var fields = [], p = e.data;
+            while (p < e.end) {
+              var f = await element(p); if (!f.end) throw Error('Invalid Info metadata.');
+              if (f.id === 0x2ad7b1) scale = Array.from(await bytes(f.data,f.end-f.data)).reduce(function (n,v) { return n*256+v; },0);
+              if (f.id !== 0x4489 && f.id !== 0xbf) fields.push(new Uint8Array(await blob.slice(f.at,f.end).arrayBuffer()));
+              p = f.end;
+            }
+            var duration = new Uint8Array(8); new DataView(duration.buffer).setFloat64(0,seconds * 1e9 / scale);
+            fields.push(el(0x4489,duration)); prefix.push(el(0x1549a966,concat(fields)));
+          } else if (![0x114d9b74,0x1c53bb6b,0xec,0xbf].includes(e.id)) prefix.push(new Uint8Array(await blob.slice(e.at,e.end).arrayBuffer()));
+          at = e.end;
+        }
+        if (++scanned % 20 === 0) self.postMessage({ progress:Math.min(.98,at/blob.size) });
+      }
+      if (!clusters.length || !clusters.some(function (c) { return c.key; })) throw Error('No seekable video clusters found.');
+      function seekHead(position) {
+        var n = new Uint8Array(8); new DataView(n.buffer).setUint32(4,position);
+        return el(0x114d9b74,el(0x4dbb,concat([el(0x53ab,uint(0x1c53bb6b)),el(0x53ac,n)])));
+      }
+      var metadata = concat(prefix), offsets = [], offset = metadata.length + seekHead(0).length;
+      clusters.forEach(function (c) { offsets.push(offset); offset += c.end-c.at; });
+      var points = []; clusters.forEach(function (c,i) { if (c.key) points.push(el(0xbb,concat([val(0xb3,c.time),el(0xb7,concat([val(0xf7,videoTrack),val(0xf1,offsets[i])]))]))); });
+      var parts = [blob.slice(0,ebml.end),new Uint8Array([0x18,0x53,0x80,0x67,0x01,255,255,255,255,255,255,255]),seekHead(offset),metadata];
+      clusters.forEach(function (c) { parts.push(blob.slice(c.at,c.end)); }); parts.push(el(0x1c53bb6b,concat(points)));
+      return new Blob(parts,{type:'video/webm'});
+    }
+    self.onmessage = async function (event) {
+      try { var result = await index(event.data.blob,event.data.duration); self.postMessage({ blob:result }); }
+      catch (e) { self.postMessage({ error:e.message }); }
+    };
+  }
+  function prepare(record, options) {
+    options = options || {};
+    return new Promise(function (resolve,reject) {
+      if (!Number.isFinite(record.duration) || record.duration <= 0) return reject(Error('Invalid video duration.'));
+      var url = URL.createObjectURL(new Blob(['(' + workerMain.toString() + ')()'],{type:'application/javascript'})), worker, timer;
+      function done(err,blob) { clearTimeout(timer); if (worker) worker.terminate(); URL.revokeObjectURL(url); if (options.signal) options.signal.removeEventListener('abort',cancel); err ? reject(err) : resolve(blob); }
+      function cancel() { done(Error('Video preparation cancelled.')); }
+      if (options.signal && options.signal.aborted) { cancel(); return; }
+      try { worker = new Worker(url); } catch (e) { done(e); return; }
+      if (options.signal) options.signal.addEventListener('abort',cancel,{once:true});
+      timer = setTimeout(function () { done(Error('Video preparation timed out.')); },90000);
+      worker.onerror = function () { done(Error('Video indexing worker failed.')); };
+      worker.onmessage = function (e) {
+        if (e.data.error) done(Error(e.data.error));
+        else if (e.data.blob) done(null,e.data.blob);
+        else if (options.progress) options.progress(e.data.progress);
+      };
+      worker.postMessage({blob:record.blob,duration:record.duration});
+    });
+  }
+  return { prepare:prepare };
+});
+
+// A user-initiated top-level form handoff works with Discord Activity's CSP.
+// Do NOT weaken CSP or proxy arbitrary network requests through the game.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(); else root.BLClipShare = factory();
+})(typeof window === 'object' ? window : this, function () {
+  'use strict';
+  function publish(blob, expiry, options) {
+    options = options || {}; var doc = options.document || document;
+    if (!options.canView || !options.canView()) throw Error('Sharing is locked during live play.');
+    if (!['1h','12h','24h','72h'].includes(expiry) || blob.size < 100 || blob.size > 96 * 1048576 || blob.type.split(';')[0] !== 'video/webm') throw Error('Choose a valid WebM clip up to 96 MB.');
+    var form = doc.createElement('form'); form.method = 'POST'; form.action = 'http://127.0.0.1:8789/publish'; form.target = '_blank'; form.enctype = 'multipart/form-data';
+    form.style.display = 'none';
+    function field(name,value) { var input = doc.createElement('input'); input.type = 'hidden'; input.name = name; input.value = value; form.appendChild(input); }
+    var file = doc.createElement('input'); file.type = 'file'; file.name = 'clip';
+    var filename=String(options.filename||'bobble-clip').replace(/[^a-zA-Z0-9_-]/g,'-').slice(0,80)+'.webm';
+    var transfer = new DataTransfer(); transfer.items.add(new File([blob],filename,{type:'video/webm'})); file.files = transfer.files; form.appendChild(file);
+    field('expiry',expiry); field('consent','litterbox-public-clip');
+    doc.body.appendChild(form);
+    try { if (!options.canView()) throw Error('Sharing cancelled.'); form.submit(); }
+    finally { form.remove(); }
+  }
+  return { publish:publish };
+});
+
+// Trims an ACTUAL recorded video by decoding/re-encoding its pixels. Never renders
+// a reconstructed match. Export is real-time and cancels if live play begins.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.BLVideoClip = factory();
+})(typeof window === 'object' ? window : this, function () {
+  'use strict';
+  async function exportClip(record, start, end, options) {
+    if (![start, end].every(Number.isFinite) || start < 0 || end > record.duration + .1 || end - start < .2 || end - start > 90) throw Error('Choose a clip between 0.2 and 90 seconds inside the video.');
+    var doc = options.document || document, video = doc.createElement('video'), canvas = doc.createElement('canvas');
+    var url = URL.createObjectURL(record.blob), stream, media, timer, chunks = [], frameCallback=null, bytes=0;
+    function guard() { if (options.signal && options.signal.aborted || !options.canView()) throw Error('Clip export cancelled. The original recording is unchanged.');if(doc.hidden)throw Error('Keep this tab visible while creating a clip. The original recording is unchanged.'); }
+    function wait(event, action) {
+      return new Promise(function (resolve, reject) {
+        var timeout = setTimeout(function () { done(Error('Video ' + event + ' timed out.')); }, 12000);
+        function done(err) { clearTimeout(timeout); video.removeEventListener(event, onEvent); video.removeEventListener('error', onError);if(options.signal)options.signal.removeEventListener('abort',onAbort); err ? reject(err) : resolve(); }
+        function onEvent() { done(); } function onError() { done(Error('The recorded video could not be decoded.')); }
+        function onAbort(){done(Error('Clip creation cancelled. The original recording is unchanged.'));}
+        video.addEventListener(event, onEvent, { once: true }); video.addEventListener('error', onError, { once: true });
+        if(options.signal)options.signal.addEventListener('abort',onAbort,{once:true});
+        try{guard();if (action) action();}catch(e){done(e);}
+      });
+    }
+    try {
+      guard(); video.muted = true; video.playsInline = true; video.preload = 'auto';
+      video.style.cssText = 'position:fixed;left:-10000px;top:0;width:2px;height:2px;pointer-events:none';
+      doc.body.appendChild(video);
+      await wait('loadedmetadata', function () { video.src = url; video.load(); }); guard();
+      if (Math.abs(video.currentTime - start) > .005) await wait('seeked', function () { video.currentTime = start; });
+      if (video.readyState < 2) await wait('loadeddata'); guard();
+      var width=video.videoWidth||record.width,height=video.videoHeight||record.height,scale=Math.min(1,1280/width,720/height);
+      if(!Number.isFinite(scale)||scale<=0)throw Error('Invalid video dimensions.');
+      canvas.width=Math.max(2,Math.floor(width*scale/2)*2);canvas.height=Math.max(2,Math.floor(height*scale/2)*2);
+      var context = canvas.getContext('2d'); context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      stream = canvas.captureStream(Math.min(record.fps || 30, 30));
+      var mime = ['video/webm;codecs=vp8', 'video/webm'].find(function (m) { return MediaRecorder.isTypeSupported(m); });
+      if (!mime) throw Error('WebM clip encoding is unavailable. Save the full recording instead.');
+      media = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1000000 });
+      var began = performance.now();
+      var result = new Promise(function (resolve, reject) {
+        media.ondataavailable = function (e) { if (e.data.size) {bytes+=e.data.size;if(bytes>96*1048576){reject(Error('Clip exceeds 96 MB. Choose a shorter range.'));return;}chunks.push(e.data);} };
+        media.onerror = function () { reject(Error('Clip encoder failed.')); };
+        media.onstop = function () { resolve(); };
+        media.start(250);
+        var drawn=-1;
+        function draw(){if(video.readyState>=2&&drawn!==video.currentTime){context.drawImage(video,0,0,canvas.width,canvas.height);drawn=video.currentTime;}}
+        if(video.requestVideoFrameCallback){var frame=function(){draw();frameCallback=video.requestVideoFrameCallback(frame);};frameCallback=video.requestVideoFrameCallback(frame);}
+        timer = setInterval(function () {
+          try {
+            guard();
+            if (performance.now() - began > (end - start) * 3000 + 15000) throw Error('Video decoding stalled. Export cancelled; try saving the full video.');
+            if(!video.requestVideoFrameCallback)draw();
+            if (options.progress) options.progress(Math.min(1, (video.currentTime - start) / (end - start)));
+            if (video.currentTime >= end || video.ended) { video.pause(); if (media.state !== 'inactive') media.stop(); }
+          } catch (e) { reject(e); }
+        }, 1000 / Math.min(record.fps || 30, 30));
+      });
+      await video.play(); await result; guard();
+      var blob = new Blob(chunks, { type: mime }); if (blob.size < 100) throw Error('Clip encoder returned an empty video.');
+      return blob;
+    } finally {
+      clearInterval(timer);if(frameCallback!==null&&video.cancelVideoFrameCallback)video.cancelVideoFrameCallback(frameCallback);
+      if (media && media.state !== 'inactive') { media.onstop = null; media.stop(); }
+      if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+      video.pause(); video.removeAttribute('src'); video.load(); video.remove(); URL.revokeObjectURL(url); chunks = [];
+    }
+  }
+  return { exportClip: exportClip };
+});
+
+// THESIS: real footage is the work; no schematic pitch or synthetic playback.
+// OWN-WORLD: extend Replay Lab's neutral/green, system-font tools and spacing.
+// STORY: capture a match, find a moment, trim it and create an expiring video link.
+// FIRST VIEWPORT: capture/library left, large native video right, timeline below.
+// FORM: incumbent surface extension in Operate mode; no visual-world replacement.
+// FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.BLVideoUI = factory();
+})(typeof window === 'object' ? window : this, function () {
+  'use strict';
+  function time(s) { s = Math.max(0, s || 0); return (s>=3600?Math.floor(s/3600)+':'+String(Math.floor(s/60)%60).padStart(2,'0'):Math.floor(s/60))+':'+String(Math.floor(s%60)).padStart(2,'0'); }
+  function size(n) { return n>=1073741824?(n/1073741824).toFixed(2)+' GB':(n / 1048576).toFixed(1) + ' MB'; }
+  function mount(service, clipper, options) {
+    options = options || {}; var doc = options.document || document, host = doc.createElement('div');
+    host.id = 'bl-replay-lab'; doc.body.appendChild(host); var root = host.attachShadow({ mode: 'closed' });
+    root.innerHTML = `<style>
+    :host{all:initial;color:#182015;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}*{box-sizing:border-box}[hidden]{display:none!important}
+    button,input,select,summary{font:inherit;color:inherit}button,select{min-height:36px;padding:7px 12px;border:1px solid #cbd2c3;border-radius:6px;background:#fafbf8}button{cursor:pointer}
+    button:hover:not(:disabled){background:#e5eddf;border-color:#49783e}button:disabled{opacity:.45;cursor:not-allowed}
+    button:focus-visible,input:focus-visible,select:focus-visible,video:focus-visible{outline:3px solid #276836;outline-offset:3px}::selection{background:#c1ddbb}
+    input{accent-color:#286838;caret-color:#286838}input[type=number]{width:82px;padding:7px;border:1px solid #aebaa4;border-radius:4px;background:#fafbf8;min-height:38px}
+    input[type=text]{min-width:0;width:100%;padding:8px 10px;border:1px solid #aebaa4;border-radius:4px;background:#fafbf8}
+    .hud{position:fixed;bottom:18px;left:18px;z-index:2147483646;display:flex;gap:6px;align-items:center;padding:5px;background:#fafbf8;border:1px solid #aebaa4;border-radius:6px;box-shadow:0 4px 14px #0003}
+    .hud output{padding:0 7px;font-size:12px;font-variant-numeric:tabular-nums}.hud[data-recording=true] output{color:#a52d25;font-weight:700}
+    .panel{position:fixed;inset:3vh 3vw;z-index:2147483647;background:#f1f3ee;border:1px solid #aebaa4;border-radius:12px;box-shadow:0 12px 48px #0005;display:flex;flex-direction:column;overflow:hidden}
+    header{padding:16px 22px;border-bottom:1px solid #cbd2c3;display:flex;justify-content:space-between;gap:16px;align-items:center}h1{font-size:21px;margin:0}h2{font-size:15px;margin:0 0 10px}p{margin:6px 0;color:#46503f}.sub{font-size:12px}
+    .layout{display:grid;grid-template-columns:224px minmax(0,1fr);flex:1;min-height:0}aside{padding:20px 14px;border-right:1px solid #cbd2c3;background:#fafbf8;overflow:auto}section{min-width:0;padding:20px 24px;overflow:auto}
+    .primary{background:#286838;color:white;border-color:#286838}.primary:hover:not(:disabled){background:#1e512b;color:white}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}.row label{display:flex;align-items:center;gap:6px;font-size:12px}
+    .settings{padding:8px 16px}.settings>label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0;font-size:12px}.settings select{min-width:112px}
+    .library{display:grid;gap:8px}.library button{text-align:left;width:100%}.library small{display:block;font-size:12px;color:#46503f}.library [aria-pressed=true]{border:2px solid #286838;padding:6px 11px}
+    .stage{min-height:180px;display:grid;place-items:center;border-radius:8px 8px 0 0;background:#10170f;overflow:hidden;aspect-ratio:16/9}.stage video{width:100%;height:100%;object-fit:contain;background:#000}.empty{padding:30px;max-width:470px;text-align:center;color:#edf3e8}.empty h2{font-size:20px}.empty p{color:#c4d0bd}.empty svg{width:30px;height:30px;margin:0 0 10px}
+    .timeline{display:flex;align-items:center;gap:12px;margin-top:12px}.timeline input{flex:1;min-width:40px;min-height:36px}.clock{font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap}.editor{border-top:1px solid #cbd2c3;margin-top:16px;padding-top:16px}
+    .moments{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.moments button{font-size:12px;min-height:34px;padding:5px 9px}.title{display:flex;gap:8px;margin-top:14px}.notice{min-height:22px;font-size:12px;line-height:1.6}footer{padding:10px 22px;border-top:1px solid #cbd2c3;color:#46503f;font-size:12px}
+    aside,section,.layout{scrollbar-color:#aebaa4 #f1f3ee;scrollbar-width:thin}
+    .header-actions{display:flex;gap:10px;align-items:center}.capture-state{font-size:12px;color:#315b30;background:#e5eddf;border-radius:20px;padding:4px 10px;max-width:32ch}.popover{position:relative}.popover>summary{cursor:pointer;list-style:none;padding:8px 12px;border-radius:6px}.popover>summary:hover{background:#e5eddf}.popover>div{position:absolute;right:0;top:42px;z-index:5;width:300px;border:1px solid #cbd2c3;border-radius:8px;background:#fafbf8;box-shadow:0 8px 24px #0002}.more>div{width:190px;padding:6px}.more button{display:block;width:100%;border:0;text-align:left}.more .danger{color:#a52d25}.viewer:fullscreen{background:#10170f;display:flex;flex-direction:column;justify-content:center;padding:20px}.viewer:fullscreen .stage{aspect-ratio:auto;flex:1;min-height:0}.viewer:fullscreen video{max-height:calc(100vh - 110px)}.playbar{padding:4px 12px 8px;background:#fafbf8;border:1px solid #d8dfd1;border-top:0;border-radius:0 0 8px 8px}.playbar .timeline{margin:0;gap:10px}.playbar .row{margin:0}.playbar button{border-color:transparent;background:transparent;padding:6px 8px}.playbar select{font-size:12px;min-height:32px;padding:4px}.playbar .space{flex:1}.title{margin:0 0 12px;align-items:center}.title input{font-size:18px;font-weight:600;border:1px solid transparent;background:transparent;padding-left:0}.title input:focus{background:#fafbf8;border-color:#aebaa4;padding-left:8px}.editor{background:#fafbf8;border:1px solid #d8dfd1;border-radius:8px;padding:16px;margin-top:12px}.editor h2{margin-bottom:12px}.editor .row{margin:8px 0}.editor .clip-actions{justify-content:flex-end;padding-top:8px}.clip-length{margin-right:auto;font-size:12px;color:#46503f}.moments:empty{display:none}.moments{margin:10px 0}.library{margin-top:14px}.library button{background:transparent;border-color:transparent;padding:10px 12px}.library [aria-pressed=true]{border:1px solid #b8c6ae;background:#e5eddf;padding:10px 12px}.library small{margin-top:4px;font-size:11px}.search{font-size:12px!important}.aside-note{margin-top:24px;font-size:11px;line-height:1.6}.notice{margin:8px 0 0;color:#46503f;font-size:12px}.notice:empty{display:none}.secondary-link{border:0;background:transparent;padding:4px 0;font-size:12px}.statusline{font-size:12px;margin:4px 0 16px}.clip-toggle{margin-left:auto}
+    :host{--ink:#233829;--muted:#52664e;--edge:#c8d1bd;--paper:#f5f7f0;--leaf:#375d29;color:var(--ink);font-family:"Segoe UI",system-ui,sans-serif;color-scheme:light}
+    .panel{inset:20px;max-width:1280px;max-height:900px;margin:auto;border-color:#a8b89c;border-radius:10px;background:var(--paper)}
+    header{background:linear-gradient(#fff,#eef1e8);padding:18px 24px;gap:12px}h1{font-size:24px;font-weight:600;line-height:1.2}.header-copy{min-width:0}.header-copy p{margin:5px 0 0;font-size:12px;color:var(--muted)}
+    .header-actions{gap:8px;flex-wrap:wrap;justify-content:flex-end}.capture-state{border-radius:4px;max-width:none;background:transparent;padding:4px 6px;font-variant-numeric:tabular-nums}.capture-state[data-state=recording]{color:#94352a;background:#f9e8df}
+    .layout{grid-template-columns:232px minmax(0,1fr)}aside{padding:20px 16px;background:#edf1e7;border-color:var(--edge)}aside h2{font-size:15px;font-weight:600;margin:20px 0 10px}.arm-control{width:100%;font-weight:600;background:var(--leaf);color:#fff;border-color:var(--leaf)}.arm-control:hover:not(:disabled){background:#294821;color:#fff}.arm-control[aria-pressed=true]{background:#fff;color:var(--leaf);border-color:#a8b89c}
+    section{padding:20px 24px}.library button{overflow-wrap:anywhere;line-height:1.45;border-radius:5px}.library small{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}.library [aria-pressed=true]{background:#dce9d0;border-color:#8fa67c}.library button:hover:not(:disabled){background:#e1e9d8}
+    .aside-note{border-top:1px solid var(--edge);padding-top:14px;margin-top:18px;font-size:12px;color:var(--muted)}.aside-note p{color:var(--muted);line-height:1.6}.aside-note meter{display:block;width:100%;height:6px;margin:8px 0 6px;accent-color:var(--leaf)}meter::-webkit-meter-bar{background:#dbe3d2;border:0}meter::-webkit-meter-optimum-value{background:#64834f}
+    .title{gap:12px;flex-wrap:wrap}.title input{flex:1;min-width:140px;font-size:20px;font-weight:500;color:var(--ink)}.save-video{font-size:12px;white-space:nowrap}.stage{background:#172319;border-radius:6px 6px 0 0}.empty{padding:32px}.empty h2{font-size:22px;font-weight:500;color:#edf3e8}.empty p{line-height:1.7;max-width:44ch}.playbar{border-color:var(--edge);padding:8px 12px;border-radius:0 0 6px 6px}.clock{min-width:83px;text-align:right}.playbar button:hover:not(:disabled){background:#e5eddf}.editor{border-color:var(--edge);padding:18px;border-radius:6px;box-shadow:none}.editor h2{font-size:16px;font-weight:600}.editor .row{gap:10px}.clip-length{font-variant-numeric:tabular-nums}.notice{color:var(--muted);margin:12px 0 0;overflow-wrap:anywhere}.notice:empty{display:none}.popover summary{border:1px solid transparent}.popover[open]>summary{background:#e5eddf;border-color:var(--edge)}summary:focus-visible{outline:3px solid var(--leaf);outline-offset:2px}.popover>div{max-height:calc(100dvh - 140px);overflow:auto}.settings{padding:10px 16px}.settings>label{gap:12px}.settings .sub{line-height:1.6}.search::placeholder,input::placeholder{color:#596b50;opacity:1}.hud{left:12px;bottom:12px;background:#f5f7f0;border-color:#a8b89c;gap:4px}.hud button{background:transparent;border-color:transparent}.hud output{font-size:12px}.hud[data-recording=true] output{color:#94352a}.hud button:disabled{display:none}
+    @media(max-width:760px){.panel{inset:8px}.layout{display:block;overflow:auto}aside{padding:14px;border-right:0;border-bottom:1px solid var(--edge);overflow:visible}.arm-control{width:auto;min-width:160px}aside h2{display:inline-block;margin:0 14px 12px 0}.search{max-width:320px}.library{display:flex;overflow:auto;gap:6px;padding-bottom:4px;scroll-snap-type:x proximity}.library button{min-width:180px;max-width:250px;flex:none;scroll-snap-align:start}.aside-note{margin-top:10px;padding-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}.aside-note p{margin:0;font-size:11px}.aside-note p:last-child{flex-basis:100%}.aside-note meter{width:70px;margin:0}.aside-note p:empty{display:none}section{padding:14px;overflow:visible}.stage{min-height:150px}.empty{padding:24px 18px}.empty h2{font-size:19px}.hud{left:8px;bottom:8px}header{padding:14px 16px}.title input{min-width:120px}.editor{padding:14px}.editor .clip-actions{justify-content:flex-start}.clip-length{flex-basis:100%}.settings{display:block;margin:0}}
+    @media(max-width:480px){header{align-items:flex-start;flex-wrap:wrap}h1{font-size:22px}.header-actions{width:100%;justify-content:flex-start;gap:4px}.header-actions>[data-id=close]{margin-left:auto}.capture-state{padding-left:0;flex:1;font-size:12px}.popover>div{position:fixed;top:128px;left:18px;right:18px;width:auto;max-height:calc(100dvh - 150px)}.more>div{left:auto;width:200px}.title{gap:6px}.title input{flex-basis:100%;font-size:18px}.empty p{font-size:13px}.playbar{padding:6px}.playbar .row{gap:3px}.playbar button{font-size:12px;padding:5px 7px}.playbar .space{display:none}.playbar .timeline{gap:6px}.playbar select{margin-left:auto}.editor .row label{font-size:12px}}
+    .stage{width:100%}.viewer:not(:fullscreen) .stage{max-height:440px}.viewer{min-width:0}
+    .retention{flex:none;margin:0;padding:9px 24px;background:#e5eddf;color:#31472c;border-bottom:1px solid var(--edge);font-size:12px;line-height:1.5}.retention[data-risk=true]{background:#fff0cf;color:#634a15}.help{padding:16px!important;width:min(420px,calc(100vw - 36px))!important}.help h2{margin:16px 0 6px}.help h2:first-child{margin-top:0}.help p,.help li{font-size:12px;line-height:1.7;color:var(--muted)}.help ul{padding-left:18px}.sharing-note{font-size:12px;line-height:1.6;color:var(--muted);margin:12px 0 0}.notice{white-space:pre-line}.queue{font-variant-numeric:tabular-nums}
+    @media(max-width:760px){aside h2{display:block;margin:16px 0 10px}}
+    @media(max-height:500px) and (min-width:761px){.panel{inset:8px}header{padding:10px 18px}.stage{min-height:160px}section{padding:14px 18px}}
+    </style>
+    <div class="hud"><button data-id="open">Recordings</button><output data-id="hud">Recorder off</output><button data-id="quickmark" aria-label="Mark current moment">Mark</button></div>
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="bl-video-title" hidden>
+      <header><div class="header-copy"><h1 id="bl-video-title">Recordings</h1><p>Match videos &amp; clips</p></div><div class="header-actions"><span class="capture-state" data-id="status" role="status" aria-live="polite"></span><details class="popover"><summary>Read first</summary><div class="help"><h2>What this records</h2><p>Silent video of the game canvas, including visible player names. Only matches you participate in. No microphone, voice chat, desktop capture, simulation or automatic uploads.</p><h2>What can be lost</h2><ul><li>Memory-only videos disappear when the activity closes or reloads.</li><li>Local disk recordings use this activity’s browser storage, not your Videos folder. Completed videos can recover for the same verified account. Discord profile changes, cleared activity/site data, uninstall/profile removal or browser eviction may delete them.</li><li>Closing or crashing before verified match completion loses the unfinished video. Stopping auto-record early discards it.</li><li>Disk full, denied storage, encoder failures, leaving a match or unverified participation can stop or discard capture. Older completed videos are never automatically deleted by this recorder.</li></ul><h2>Keep important videos</h2><p>Save full video or Save clip, then check the file in Downloads. A download request is not proof it finished. Keep the activity visible to avoid frozen frames. Clips are created in real time, up to 90 seconds.</p><h2>Sharing is public</h2><p>The local clip helper must be running. Nothing uploads until you confirm. Anyone with a link can watch. Free-host links expire or may be removed earlier; deletion/revocation is not guaranteed. Keep a local copy.</p><h2>Long sessions</h2><p>Local disk mode targets hour-long capture with a bounded 32 MB write queue and an 8 GB library budget. Default Compact targets roughly 450 MB per hour; Smallest targets 270 MB. Smaller files can look softer during motion. Leave extra free space for the game. Capacity estimates are not guarantees. Use disk mode for hour-long recording.</p></div></details><details class="popover"><summary>Settings</summary><div class="settings"><label>Frame rate<select data-id="fps"><option value="24">24 FPS</option><option value="30" selected>30 FPS</option><option value="60">60 FPS</option></select></label>
+          <label>Recording size<select data-id="quality"><option value="0.6">Smallest · ~270 MB/hour</option><option value="1" selected>Compact · ~450 MB/hour</option><option value="2">Clearer · ~900 MB/hour</option><option value="3">High · ~1.35 GB/hour</option><option value="6">Very high · ~2.7 GB/hour</option><option value="12">Maximum · ~5.4 GB/hour</option></select><span>Estimates, not limits. Smaller files can look softer during fast motion. Applies to future recordings.</span></label>
+          <label>Memory fallback limit<select data-id="memory"><option value="128">128 MB</option><option value="256" selected>256 MB</option><option value="384">384 MB</option></select></label>
+          <label><input data-id="auto" type="checkbox">Save video automatically after match</label>
+          <p class="sub">Silent game video. Includes visible game names. 30 FPS is recommended for smooth capture.</p><p class="sub">Shortcuts: Space · play/pause, ←/→ · seek, I/O · trim, Ctrl+Shift+M · mark.</p>
+        </div></details><button data-id="close" aria-label="Close recordings">Close</button></div></header>
+      <p class="retention" data-id="retention" role="status"></p>
+      <div class="layout"><aside><button class="arm-control" data-id="arm" aria-pressed="false">Turn on auto-record</button><h2>Your matches</h2><input class="search" data-id="search" type="text" placeholder="Search recordings" aria-label="Filter completed recordings"><div class="library" data-id="library"></div>
+        <div class="aside-note"><p data-id="health"></p><meter data-id="memory-used" min="0" max="536870912" value="0" aria-label="Recording storage budget used"></meter><p data-id="storage"></p><p class="queue" data-id="capacity"></p><button class="secondary-link" data-id="mark" hidden>Mark moment</button><p data-id="storage-note">Save important videos to Downloads and check the files.</p></div>
+      </aside><section>
+        <div class="title"><input data-id="name" type="text" maxlength="80" aria-label="Recording name" placeholder="Select a recording"><button class="save-video" data-id="download">Save full video</button><details class="popover more"><summary aria-label="Recording actions">More</summary><div><button data-id="marks">Save timestamps</button><button class="danger" data-id="delete">Delete recording</button></div></details></div>
+        <div class="viewer" data-id="viewer"><div class="stage"><video data-id="video" playsinline preload="auto" tabindex="0" aria-label="Recorded game video" hidden></video>
+          <div class="empty" data-id="empty"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="5" y="13" width="22" height="15" rx="3" stroke="currentColor" stroke-width="2"/><path d="M10 13V9a6 6 0 0 1 12 0v4M16 19v4" stroke="currentColor" stroke-width="2"/></svg><h2 data-id="emptyTitle">Record the game you actually see.</h2><p data-id="emptyText">Arm before playing. Mark moments during the match, then watch and save the real footage after it finishes.</p></div>
+        </div>
+        <div class="playbar"><div class="timeline"><input data-id="scrub" type="range" min="0" max="1" step="0.01" value="0" aria-label="Video position"><span class="clock" data-id="clock">0:00 / 0:00</span></div>
+        <div class="row"><button data-id="play">Play</button><button data-id="back" aria-label="Back five seconds">−5s</button><button data-id="forward" aria-label="Forward five seconds">+5s</button><span class="space"></span>
+          <select data-id="speed" aria-label="Playback speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select><button data-id="fullscreen">Fullscreen</button>
+        </div></div></div>
+        <div class="row"><div class="moments" data-id="moments" aria-label="Marked moments"></div><button class="primary clip-toggle" data-id="clip" aria-expanded="false">Create clip</button></div>
+        <div class="editor" data-id="editor" hidden><h2>Trim clip</h2>
+          <div class="row"><label>Start<input data-id="in" type="number" min="0" step="0.1" value="0" aria-label="Clip start in seconds"></label><button data-id="setin" title="Use playhead (I)">Set here</button><label>End<input data-id="out" type="number" min="0" step="0.1" value="0" aria-label="Clip end in seconds"></label><button data-id="setout" title="Use playhead (O)">Set here</button><label><input data-id="loop" type="checkbox">Loop</label></div>
+          <div class="clip-actions row"><span class="clip-length" data-id="length">Up to 90 seconds</span><label>Expires<select data-id="expiry"><option value="1h">1 hour</option><option value="12h">12 hours</option><option value="24h" selected>24 hours</option><option value="72h">3 days</option></select></label><button data-id="export">Save clip</button><button class="primary" data-id="share">Create link</button><button data-id="cancel" hidden>Cancel</button></div>
+          <p class="sharing-note">Create clip → choose a range → Create link → confirm Upload clip. Sharing needs <strong>Start clip sharing in the Bobble Addons launcher</strong> running. Clips are encoded in real time, up to 720p / 30 FPS. Keep this tab visible. Public links expire; save a local copy.</p>
+        </div><p class="notice" data-id="notice" role="status" aria-live="polite"></p>
+      </section></div>
+    </div>`;
+    var $ = function (id) { return root.querySelector('[data-id="' + id + '"]'); }, panel = root.querySelector('.panel'), hud = root.querySelector('.hud');
+    var video = $('video'), selected = null, url = null, signature = '', busy = false, abort = null, lastFocus = null, dead = false, selectionEpoch = 0, preparedClip = null;
+    var downloadJobs=new Map(),autoAttempts=new Set();
+    var acknowledged=false;
+    var controls = ['scrub','back','play','forward','speed','fullscreen','name','download','marks','delete','clip','in','out','setin','setout','loop','export','share','expiry'];
+    function notice(text) { if($('notice').textContent!==text)$('notice').textContent = text; }
+    function revoke() { if (url) URL.revokeObjectURL(url); url = null; }
+    function clear() {
+      selectionEpoch++; preparedClip = null; video.pause(); video.removeAttribute('src'); video.load(); revoke(); selected = null;
+      video.hidden = true; $('empty').hidden = false; $('moments').replaceChildren(); $('editor').hidden = true; $('clip').setAttribute('aria-expanded','false');
+      $('scrub').value = 0; $('clock').textContent = '0:00 / 0:00'; if (abort) abort.abort();
+    }
+    function download(blob, name) {
+      if (!service.status().canView) throw Error('Saving is locked while match status is live or unknown.');
+      var u = URL.createObjectURL(blob), a = doc.createElement('a'); a.href = u; a.download = name; root.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(u); }, 2000);
+    }
+    async function save(id) {
+      if(downloadJobs.has(id))return;
+      var controller=new AbortController();downloadJobs.set(id,controller);
+      try{
+        var r = service.recording(id);
+        if(selected&&selected.id===id&&!busy)r.blob=selected.blob;
+        else if(options.indexer){notice('Preparing a seekable full-video download…');try{r.blob=await options.indexer.prepare(r,{signal:controller.signal});}catch(e){if(controller.signal.aborted)throw e;notice('Seek optimization failed. Saving original WebM; try an external player if seeking is unavailable.');}}
+        if(controller.signal.aborted||dead)throw Error('Download preparation cancelled.');
+        download(r.blob, r.file + '.webm'); service.downloaded(id);notice('Video download requested. Check the completed file in Downloads; the recorder cannot confirm that your browser saved it.');
+      }finally{downloadJobs.delete(id);}
+    }
+    function rangeAround(t) {
+      if (!selected) return;
+      $('in').value = Math.max(0, t - 5).toFixed(1);
+      $('out').value = Math.min(selected.duration, t + 5).toFixed(1);
+    }
+    async function select(id) {
+      if (busy) return;
+      try {
+        var r = service.recording(id); clear(); selected = r;
+        if (options.indexer) {
+          busy = true; abort = new AbortController(); var epoch = selectionEpoch;
+          notice('Preparing smooth playback…'); refresh();
+          try { r.blob = await options.indexer.prepare(r, { signal:abort.signal }); }
+          catch (e) { if (!abort.signal.aborted) r.warnings.push('Seek optimization unavailable. Playing original video.'); }
+          finally { busy = false; abort = null; }
+          if (dead || selectionEpoch !== epoch || !service.status().canView) { refresh(); return; }
+        }
+        url = URL.createObjectURL(r.blob); video.src = url; video.hidden = false; $('empty').hidden = true;
+        $('name').value = r.title; $('scrub').max = r.duration; $('in').value = 0; $('out').value = Math.min(r.duration, 10).toFixed(1);
+        $('in').max = $('out').max = r.duration.toFixed(3); video.playbackRate = Number($('speed').value);
+        r.marks.forEach(function (m) {
+          var b = doc.createElement('button'); b.textContent = time(m.t) + ' · ' + m.label;
+          b.onclick = function () { if (!service.status().canView || busy) return; video.currentTime = Math.min(m.t, r.duration); rangeAround(m.t); };
+          $('moments').appendChild(b);
+        });
+        notice(r.warnings.join(' '));
+        signature = ''; refresh();
+      } catch (e) { notice(e.message); }
+    }
+    function refresh() {
+      if (dead) return;
+       var s = service.status();
+       if(!s.canView)downloadJobs.forEach(c=>c.abort());
+       var disk=!!s.storage&&s.storage.available,low=disk&&s.estimatedRemainingSeconds<3600,retention=disk?(low?'Less than one hour of estimated storage budget remains. Save/delete older cached videos or free disk before a long match. ':'')+'Local disk cache is not a backup. Clearing activity/profile data may delete videos; save important files to Downloads.':s.storage&&!s.storage.ready?'Preparing local disk storage…':'Memory only: closing or reloading the activity deletes unsaved videos. Hour-long capture requires local disk storage.';
+       if($('retention').textContent!==retention)$('retention').textContent=retention;$('retention').dataset.risk=String(!disk||low);
+      $('status').dataset.state=s.state; panel.setAttribute('aria-busy',String(busy));
+      $('status').textContent = s.state === 'recording' ? 'Recording · ' + time(s.capturedSeconds) : s.state === 'paused'?'Partial capture · waiting for match end':s.state === 'warning'?'Capture needs attention':s.state === 'ready' ? 'Ready' : s.state === 'finalizing' ? 'Finalizing' : s.armed ? 'Auto-record on' : 'Recorder off';
+      $('status').title = s.message; $('health').textContent = s.state === 'recording' ? size(s.bytes) + ' · ' + s.marks + ' marks' : s.lastError || '';
+      hud.dataset.recording = String(s.state === 'recording');hud.dataset.warning=String(['paused','warning'].includes(s.state)); $('hud').textContent = s.state === 'recording' ? 'REC ' + time(s.capturedSeconds) : s.state==='paused'?'Capture stopped':s.state==='warning'?'Capture error':s.state === 'finalizing' ? 'Finalizing…' : s.armed ? 'Armed · ' + s.state : 'Recorder off';
+      $('arm').textContent = s.armed ? 'Turn off auto-record' : 'Turn on auto-record'; $('arm').setAttribute('aria-pressed',String(s.armed)); $('mark').disabled = $('quickmark').disabled = s.state !== 'recording';
+      ['fps','quality','memory','auto'].forEach(function (key) { $(key).disabled = ['recording','checking','finalizing','paused'].includes(s.state); });
+      $('storage').textContent = size(s.totalBytes+s.bytes) + ' of '+size(s.totalLimit||536870912)+(disk?' · local disk':' · memory');
+      $('memory-used').max=s.totalLimit||536870912;$('memory-used').value=s.totalBytes+s.bytes;
+      $('capacity').textContent=(disk?'Disk budget':'Memory fallback')+' · approx. '+Math.floor((s.estimatedRemainingSeconds||0)/60)+' min'+(disk?' · RAM queue '+size(s.memoryBytes||0)+' · actual free disk may be lower':' remaining');
+      $('storage-note').textContent=disk?(s.storage.persistent?'Persistent storage granted; still not a backup.':'Browser eviction protection not granted. Save important videos.'):(s.storage&&s.storage.error||'No disk cache. Unsaved videos disappear on close.');
+      if (!s.canView && selected) { clear(); notice('Video viewing/export locked because a live match or unknown state was detected.'); }
+      controls.forEach(function (key) { $(key).disabled = !s.canView || !selected || busy; });
+      $('emptyTitle').textContent = s.live ? 'See you after the match.' : s.state === 'finalizing' ? 'Finishing your recording…' : s.canView ? 'Pick a match to watch.' : 'Your next match, ready to replay.';
+       $('emptyText').textContent = s.live ? 'Your recording unlocks when the match ends. Closing or leaving before verification can discard it.' : s.state==='finalizing' ? 'Finishing the video. Keep the activity open.' : s.recovering ? 'Looking for completed local disk recordings for your verified account…' : s.savedCount ? 'Choose a completed match from Your matches. Save the full video or trim a clip.' : s.armed ? 'Auto-record is on. Play a match; the video will appear here when it ends.' : 'Turn on auto-record before playing. Your completed matches will appear here.';
+      if (selected) { var length = Number($('out').value) - Number($('in').value); $('length').textContent = length > 0 ? length.toFixed(1) + 's selected · max 90s' : 'Choose a start and end'; }
+      if (preparedClip && (!selected || preparedClip.id !== selected.id || preparedClip.start !== Number($('in').value) || preparedClip.end !== Number($('out').value))) preparedClip = null;
+      $('share').textContent = preparedClip ? 'Upload clip' : 'Create link';
+      var query = $('search').value.toLowerCase(), next = JSON.stringify([s.revision===undefined?s.recordings:s.revision,s.canView, selected && selected.id, query]);
+      if (signature !== next) {
+        signature = next; $('library').replaceChildren();
+        var matches = s.recordings.filter(function (r) { return r.title.toLowerCase().includes(query); });
+        if (!matches.length) { var p = doc.createElement('p'); p.className = 'sub'; p.textContent = !s.canView && s.savedCount ? 'Videos locked during play or unverified status.' : query ? 'No matching recordings.' : 'No completed videos yet.'; $('library').appendChild(p); }
+        matches.forEach(function (r) {
+          var b = doc.createElement('button'); b.textContent = r.title; b.setAttribute('aria-pressed', String(!!selected && selected.id === r.id));
+           var small = doc.createElement('small'); small.textContent = time(r.duration) + ' · ' + size(r.bytes) + ' · ' + r.marks.length + ' marks' + (r.downloaded ? ' · download requested' : r.disk?' · disk cache':' · not downloaded'); b.appendChild(small);
+          b.onclick = function () { select(r.id); }; $('library').appendChild(b);
+        });
+      }
+      s.recordings.forEach(function (r) {
+        if (r.autoDownload && !r.downloaded&&!autoAttempts.has(r.id)&&!downloadJobs.size) {autoAttempts.add(r.id);save(r.id).catch(e=>notice('Automatic download failed: '+e.message+' Your cached recording is unchanged. Use Save full video to retry.'));}
+      });
+    }
+    function mark() { notice(service.mark() ? 'Moment marked. It will appear below the video after the match.' : 'No active participant video to mark.'); refresh(); }
+    function open() { lastFocus = doc.activeElement; panel.hidden = false; hud.hidden = true; refresh(); $('close').focus(); }
+    function close() { panel.hidden = true; hud.hidden = false; video.pause(); if (abort) abort.abort(); (lastFocus && lastFocus.isConnected ? lastFocus : $('open')).focus(); }
+    function seek(delta) { if (selected && service.status().canView && !busy) video.currentTime = Math.max(0, Math.min(selected.duration, video.currentTime + delta)); }
+    async function exportRange(share) {
+      if (!selected || busy) return;
+      var r;
+      try {
+        r = service.recording(selected.id); if (selected.blob) r.blob = selected.blob;
+        if(!share&&preparedClip&&preparedClip.id===r.id&&preparedClip.start===Number($('in').value)&&preparedClip.end===Number($('out').value)){download(preparedClip.blob,r.file+'-clip-'+preparedClip.start.toFixed(1)+'.webm');notice('Clip download requested. Check Downloads before closing the activity.');return;}
+        if (share && preparedClip && preparedClip.id === r.id && preparedClip.start === Number($('in').value) && preparedClip.end === Number($('out').value)) {
+          if (!confirm('Upload this clip to Litterbox? Anyone with the link can watch, including visible player names. It expires after ' + $('expiry').selectedOptions[0].text + '. The link opens in a separate tab.')) return;
+          if (!options.sharer) throw Error('Clip sharing is unavailable.');
+          options.sharer.publish(preparedClip.blob, $('expiry').value, { document:doc, filename:r.file+'-clip-'+preparedClip.start.toFixed(1), canView:function () { return !dead && service.status().canView; } });
+          notice('Sharing tab opened. Wait there for the public link. If the helper is unavailable, run Start clip sharing in the Bobble Addons launcher and retry. Your prepared clip is kept here: Upload clip retries; Save clip downloads it.'); return;
+        }
+        busy = true; abort = new AbortController(); $('cancel').hidden = false; video.pause(); refresh();
+        var blob = await clipper.exportClip(r, Number($('in').value), Number($('out').value), {
+          document: doc, signal: abort.signal, canView: function () { return !dead && service.status().canView; },
+          progress: function (p) { notice('Creating clip · ' + Math.round(p * 100) + '%'); }
+        });
+        if(options.indexer){notice('Adding clip duration and seek points…');blob=await options.indexer.prepare({blob:blob,duration:Number($('out').value)-Number($('in').value)},{signal:abort.signal});}
+        if(!service.status().canView||abort.signal.aborted)throw Error('Clip preparation cancelled. The original recording is unchanged.');
+        preparedClip = { id:r.id, start:Number($('in').value), end:Number($('out').value), blob:blob };
+        if (share) {
+          if (!service.status().canView || abort.signal.aborted) throw Error('Sharing cancelled.');
+          notice('Clip ready. Choose Upload clip to create a public link.');
+        } else { download(blob, r.file + '-clip-' + Number($('in').value).toFixed(1) + '.webm'); notice('Clip download requested. Check Downloads before closing the activity.'); }
+      } catch (e) { notice(e.message); }
+      finally { busy = false; abort = null; $('cancel').hidden = true; refresh(); }
+    }
+    video.ontimeupdate = function () {
+      if (!selected) return;
+      if (!service.status().canView) { clear(); refresh(); return; }
+      if ($('loop').checked && video.currentTime >= Number($('out').value) && Number($('out').value) > Number($('in').value)) video.currentTime = Number($('in').value);
+      $('scrub').value = Math.min(selected.duration, video.currentTime); $('clock').textContent = time(video.currentTime) + ' / ' + time(selected.duration);
+    };
+    video.onplay = function () { if (!service.status().canView) { clear(); return; } $('play').textContent = 'Pause'; };
+    video.onpause = function () { $('play').textContent = 'Play'; };
+    video.onerror = function () { if (selected) notice('This video could not be decoded here. Try Save full video and open the WebM externally.'); };
+    $('open').onclick = open; $('close').onclick = close; $('quickmark').onclick = $('mark').onclick = mark;
+    $('arm').onclick = function () {
+      var s = service.status();
+      if(!s.armed&&!acknowledged){if(!confirm('Record silent game-canvas video, including visible player names?\n\n'+(s.storage&&s.storage.available?'Completed recordings use local browser disk storage, not your Videos folder. Cleared profile/activity data or eviction can delete them.':'Disk storage is not ready or unavailable. Memory-only fallback cannot capture an hour and loses unsaved videos on close/reload.')+'\n\nClosing, leaving or crashing before verified match completion may discard unfinished video. Keep the activity visible. Save important videos to Downloads and check the files. Nothing uploads without your confirmation.\n\nContinue?'))return;acknowledged=true;}
+      if (s.armed && ['recording','checking','finalizing'].includes(s.state) && !confirm('Stop recording? This unfinished video will be discarded.')) return;
+      service.arm(!s.armed); refresh();
+    };
+    $('play').onclick = function () { if (!selected || busy || !service.status().canView) return; video.paused ? video.play().catch(function (e) { notice(e.message); }) : video.pause(); };
+    $('back').onclick = function () { seek(-5); }; $('forward').onclick = function () { seek(5); };
+    $('scrub').oninput = function () { if (selected) $('clock').textContent = time(Number(this.value)) + ' / ' + time(selected.duration); };
+    $('scrub').onchange = function () { if (selected && service.status().canView) video.currentTime = Number(this.value); };
+    $('speed').onchange = function () { video.playbackRate = Number(this.value); };
+    $('fullscreen').onclick = function () { if (service.status().canView) { if (doc.fullscreenElement) doc.exitFullscreen(); else $('viewer').requestFullscreen().catch(function (e) { notice(e.message); }); } };
+    $('clip').onclick = function () { $('editor').hidden = !$('editor').hidden; $('clip').setAttribute('aria-expanded', String(!$('editor').hidden)); if (!$('editor').hidden) rangeAround(video.currentTime); refresh(); if (!$('editor').hidden) $('editor').scrollIntoView({block:'nearest'}); };
+    $('setin').onclick = function () { $('in').value = video.currentTime.toFixed(1);refresh(); }; $('setout').onclick = function () { $('out').value = video.currentTime.toFixed(1);refresh(); };
+    $('name').onchange = function () { try { service.rename(selected.id, $('name').value); selected.title = $('name').value; signature = ''; refresh(); } catch (e) { notice(e.message); } };
+    $('download').onclick = async function () { try { await save(selected.id); refresh(); } catch (e) { notice(e.message); } };
+    $('marks').onclick = function () { try { var r = service.recording(selected.id); download(new Blob([JSON.stringify(service.metadata(r.id), null, 2)], { type: 'application/json' }), r.file + '-moments.json'); notice('Saved bookmark timestamps. Keep this file alongside your WebM.'); } catch (e) { notice(e.message); } };
+    $('delete').onclick = async function () { if (selected&&!busy && confirm('Permanently delete this cached recording? There is no undo. This does not delete a separately downloaded file or revoke a public clip link. Check your download first.')) { try{busy=true;refresh();await service.remove(selected.id);clear();notice('Cached recording deleted. Downloaded files and public links are unchanged.');}catch(e){notice('Could not delete the recording: '+e.message);}finally{busy=false;refresh();} } };
+    $('export').onclick = function () { exportRange(false); }; $('share').onclick = function () { exportRange(true); }; $('cancel').onclick = function () { if (abort) abort.abort(); };
+    $('search').oninput = refresh;
+    function prefs() {
+      try {
+        var p = service.configure({ fps: Number($('fps').value), mbps: Number($('quality').value), maxMB: Number($('memory').value), autoDownload: $('auto').checked });
+        try { localStorage.setItem('bl-video-prefs/v1', JSON.stringify(p)); } catch (_) {}
+      } catch (e) { notice(e.message); }
+    }
+    ['fps','quality','memory','auto'].forEach(function (key) { $(key).onchange = prefs; });
+    try {
+      var stored = JSON.parse(localStorage.getItem('bl-video-prefs/v1') || 'null');
+      if (stored) service.configure(stored);
+    } catch (_) {}
+    var config = service.status().settings; $('fps').value = config.fps; $('quality').value = config.mbps; $('memory').value = config.maxMB; $('auto').checked = config.autoDownload;
+    function key(e) {
+      if(e.key==='Escape'&&!panel.hidden){e.preventDefault();e.stopPropagation();var popover=panel.querySelector('details[open]');if(popover){popover.open=false;popover.querySelector('summary').focus();}else close();return;}
+      var path = e.composedPath ? e.composedPath() : [e.target], typing = path.some(function (el) { return el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)); });
+      // Window-level events are retargeted at a CLOSED shadow host; their path
+      // omits our internal inputs. Check the actual focused element here too.
+      var focused = root.activeElement;
+      typing = typing || !!focused && (focused.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName));
+      if (typing) return;
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && ['KeyR','KeyM'].includes(e.code)) {
+        e.preventDefault(); e.stopPropagation(); if (!e.repeat) e.code === 'KeyR' ? open() : mark(); return;
+      }
+      if (panel.hidden) return;
+      if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+      if (e.ctrlKey || e.altKey || e.metaKey || busy || !selected || !service.status().canView) return;
+      if (e.code === 'Space') { e.preventDefault(); $('play').click(); }
+      if (e.code === 'ArrowLeft') { e.preventDefault(); seek(e.shiftKey ? -1 : -5); }
+      if (e.code === 'ArrowRight') { e.preventDefault(); seek(e.shiftKey ? 1 : 5); }
+      if (e.code === 'KeyI') $('setin').click(); if (e.code === 'KeyO') $('setout').click();
+    }
+    doc.defaultView.addEventListener('keydown', key, true);
+    root.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Tab' && !panel.hidden) {
+        var all = Array.from(panel.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,video')).filter(function (el) { return el.getClientRects().length > 0; });
+        var first = all[0], last = all[all.length - 1];
+        if (e.shiftKey && root.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && root.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    });
+    ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(function (name) { root.addEventListener(name, function (e) { e.stopPropagation(); }); });
+    root.addEventListener('toggle',function(e){if(e.target.tagName==='DETAILS'&&e.target.open)root.querySelectorAll('details[open]').forEach(function(d){if(d!==e.target)d.open=false;});},true);
+    function beforeClose(e) { var s=service.status();if (s.savedCount||s.bytes||s.finalizing||busy||downloadJobs.size) { e.preventDefault(); e.returnValue = ''; } }
+    doc.defaultView.addEventListener('beforeunload', beforeClose);
+    var lastHidden=0,interval = setInterval(function(){var t=performance.now();if(panel.hidden&&t-lastHidden<1000)return;lastHidden=t;refresh();}, 200); refresh();
+    return Object.freeze({ open: open, mark: mark,
+      inspect: function () { var q = video.getVideoPlaybackQuality && video.getVideoPlaybackQuality(); return { open: !panel.hidden, text: $('status').textContent, hud: $('hud').textContent, nativeControls:video.controls, selected:!!selected, finiteDuration:!!selected && Number.isFinite(video.duration), decodedFrames:q ? q.totalVideoFrames : 0, droppedFrames:q ? q.droppedVideoFrames : 0 }; },
+      dispose: function () { dead = true; clearInterval(interval); if (abort) abort.abort();downloadJobs.forEach(c=>c.abort()); clear(); doc.defaultView.removeEventListener('keydown', key, true); doc.defaultView.removeEventListener('beforeunload', beforeClose); host.remove(); }
+    });
+  }
+  return { mount: mount, time: time };
+});
+
+(function () {
+  'use strict';
+  if (window.__blReplay) return;
+  var reader = window.BLReplayReader.createReader(function () {
+    var u = window.__blUnity || window.unityInstance, m = u && (u.Module || u);
+    return m && m.HEAPU8 && m.HEAPU8.buffer || m && m.asm && m.asm.Kh && m.asm.Kh.buffer || null;
+  });
+  var storage=window.BLVideoStore.create();
+  var recorder = window.BLVideoRecorder.create({ storage:storage, canvas: function () {
+    var exact = document.querySelector('#unity-canvas, #canvas');
+    if (exact && exact.tagName === 'CANVAS') return exact;
+    return Array.from(document.querySelectorAll('canvas')).filter(function (c) {
+      return c.id !== 'blt-arc' && c.width > 0 && c.height > 0;
+    }).sort(function (a, b) { return b.width * b.height - a.width * a.height; })[0] || null;
+  } });
+  var ui = window.BLVideoUI.mount(recorder, window.BLVideoClip, { indexer:window.BLVideoIndex, sharer:window.BLClipShare }), errors = 0, readMs = 0;
+   delete window.BLReplayReader; delete window.BLVideoRecorder; delete window.BLVideoStore; delete window.BLVideoUI; delete window.BLVideoClip; delete window.BLVideoIndex; delete window.BLClipShare;
+  var timer = setInterval(function () {
+    var t = performance.now();
+    try { recorder.observe(reader.read()); } catch (_) { errors++; recorder.observe(null); }
+    readMs = performance.now() - t;
+  }, 200);
+  window.__blReplay = Object.freeze({
+    version: 'video-replay-3-disk', open: ui.open,
+    status: function () { return Object.assign(recorder.status(), { errors: errors, readMs: +readMs.toFixed(3), ui: ui.inspect(), trust: 'local-video-release-policy-not-server-attestation' }); },
+    dispose: function () { clearInterval(timer); ui.dispose(); recorder.dispose(); delete window.__blReplay; }
+  });
+  window.__blVer = 'video-replay-3-disk';
+})();
+
+} } catch(error) { window.__blReplayBootError=String(error); }
 })();

@@ -29,11 +29,26 @@ test('off by default, no allocations; wrong club untouched',()=>{
   s.engine.assign('Bear','hydro');s.engine.setEnabled(true);assert.equal(s.engine.state().attached,0);assert.equal(s.writes.length,0);s.engine.dispose();
 });
 test('auto follows resolved club without changing manual assignments; missing team restores',()=>{
-  const s=boot();let own='Bull';s.window.__bobbleLocalClubTest=()=>own;
+  const s=boot();let own='Bull';s.window.__bobbleResolveSkinTeam=(_,targets)=>({club:own,roots:new Set(targets.filter(t=>t.club===own).map(t=>t.root))});
   s.engine.auto('hydro');s.engine.setEnabled(true);assert.equal(s.engine.state().autoClub,'Bull');assert.equal(s.engine.state().attached,1);assert.equal(s.engine.state().assignments.Bull,'original');
   own='Bear';s.advance(1200);assert.equal(s.engine.state().autoClub,'Bear');assert.equal(s.engine.state().attached,0);assert.equal(s.meshes.get(200),400);
   own='';s.advance(1200);assert.equal(s.engine.state().autoClub,'');assert.equal(s.engine.state().attached,0);
   own='Bull';s.advance(1200);assert.equal(s.engine.state().attached,1);s.engine.auto('');assert.equal(s.engine.state().attached,0);assert.equal(s.engine.state().assignments.Bull,'original');s.engine.dispose();
+});
+test('auto suppresses old manual opponent assignments and never guesses from club',()=>{
+  const s=boot();s.engine.assign('Bull','hydro');s.engine.auto('hydro');s.engine.setEnabled(true);
+  assert.equal(s.engine.state().attached,0,'Unverified ownership cannot fall back to manual club swaps');
+  s.window.__bobbleResolveSkinTeam=()=>({club:'Bull',roots:new Set([999])});s.advance(1200);
+  assert.equal(s.engine.state().attached,0,'Matching club alone is insufficient');
+  s.window.__bobbleResolveSkinTeam=()=>({club:'Bull',roots:new Set([112])});s.advance(1200);assert.equal(s.engine.state().attached,1);
+  s.window.__bobbleResolveSkinTeam=()=>null;s.advance(1200);assert.equal(s.engine.state().attached,0);assert.equal(s.meshes.get(200),400);
+  s.advance(1800001);assert.equal(s.engine.state().enabled,true,'Auto mode can wait in the lobby for the next match');s.engine.dispose();
+});
+test('remembered auto choice survives reload while manual-only preferences still start off',()=>{
+  const s=boot();s.engine.remember(true);s.engine.auto('hydro');
+  const saved=JSON.parse(s.store.get('bobble-wardrobe.preferences.v1'));assert.equal(saved.autoSkin,'hydro');s.engine.dispose();
+  const next=boot({saved});assert.equal(next.engine.state().autoSkin,'hydro');assert.equal(next.engine.state().enabled,true);assert.equal(next.engine.state().attached,0);next.engine.dispose();
+  const bad=boot({saved:{version:1,autoSkin:'missing',assignments:{Bull:'hydro'}}});assert.equal(bad.engine.state().enabled,false);assert.equal(bad.engine.state().autoSkin,'');bad.engine.dispose();
 });
 test('assign, enable, restore, re-enable and reset',()=>{
   const s=boot();s.engine.assign('Bull','hydro');s.engine.setEnabled(true);

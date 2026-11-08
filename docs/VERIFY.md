@@ -1,15 +1,15 @@
-# Verify Preview 5
+# Verify Preview 6
 
 The release contains the Windows executable; this repository contains its source,
 bundled JS payloads, canonical quality models, authoring scripts and tests.
-See `RELEASE-PREVIEW-5.json` and the release's `SHA256SUMS.txt` for hashes.
+See `RELEASE-PREVIEW-6.json` and the release's `SHA256SUMS.txt` for hashes.
 This is maintainer verification, not an independent audit.
 
 ```powershell
 Get-FileHash .\BobbleWardrobe-Preview.exe -Algorithm SHA256
 ```
 
-Compare against `executable.sha256` in `RELEASE-PREVIEW-5.json`. Executables are
+Compare against `executable.sha256` in `RELEASE-PREVIEW-6.json`. Executables are
 not Windows code-signed and rebuilds are not claimed bit-for-bit reproducible.
 The checked-in `launcher/bundle` files are the release payload. The older
 `RELEASE-PREVIEW-3.json` record remains available for verifying Preview 3 at its tag.
@@ -31,7 +31,7 @@ it does not match the current quality bundle.
 Verify the separate signed desktop descriptor and executable:
 
 ```powershell
-python -c "import json; from pathlib import Path; from launcher_updates import verify,validate_binary; p=json.loads(Path('update-policy.json').read_text()); r=verify(Path('../launcher-update.json').read_bytes(),p['publicKey']); validate_binary(Path('release-preview-5/BobbleWardrobe-Preview.exe').read_bytes(),r); print('Signed launcher bytes match, release',r.number)"
+python -c "import json; from pathlib import Path; from launcher_updates import verify,validate_binary; p=json.loads(Path('update-policy.json').read_text()); r=verify(Path('../launcher-update.json').read_bytes(),p['publicKey']); validate_binary(Path('release-preview-6/BobbleWardrobe-Preview.exe').read_bytes(),r); print('Signed launcher bytes match, release',r.number)"
 ```
 
 Tests cover wrong products/URLs/signatures, tampered binaries, replay, same-counter

@@ -16,23 +16,18 @@
   let enabled=false,remember=false,disposed=false,error='',timer=0,busy=false;
   let started=Date.now(),everAttached=false,expired=false,storageWarning='';
   let assignments=Object.fromEntries(clubs.map(c=>[c,'original']));
-  let autoSkin='',autoClub='';
-  // Indexes are the verified NetGameCG6 club catalog order, not match sides.
-  const clubById=['Bug','Hawk','Bear','Tiger','Pig','Bull','Dino','SnowMan'];
+  let autoSkin='',autoClub='',autoRoots=new Set();
   function localClub(targets){
-    if(typeof window.__bobbleLocalClubTest==='function')return window.__bobbleLocalClubTest(targets);
-    const f=P.T.get(7471);if(!f||f.name!=='18429'||f.length!==2)return '';
-    const go=P.find('ClientGameContext'),ctx=go&&P.component(go,'GameContext_Shared');if(!ctx)return '';
-    const stack=P.M.stackSave();let team;try{team=f(ctx,0);}finally{P.M.stackRestore(stack);}
-    if(team!==0&&team!==1)return '';
-    const id=P.M.HEAP32[(ctx+(team===0?44:48))>>2];if(!Number.isInteger(id)||id<0||id>=clubById.length)return '';
-    const club=clubById[id];return clubs.includes(club)&&targets.some(t=>t.club===club)?club:'';
+    let resolved;
+    try{resolved=window.__bobbleResolveSkinTeam?.(P,targets);}catch{return '';}
+    if(!resolved||!clubs.includes(resolved.club))return '';
+    autoRoots=resolved.roots;return resolved.club;
   }
-  function wanted(club){return autoSkin&&club===autoClub?autoSkin:assignments[club];}
+  function wanted(target){return autoSkin?(target.club===autoClub&&autoRoots.has(target.root)?autoSkin:'original'):assignments[target.club];}
   const normalize=s=>({Hawks:'Hawk',Pigs:'Pig'}[s]||s);
   function save(){
     try{
-      if(remember)localStorage.setItem(storageKey,JSON.stringify({version:1,assignments}));
+      if(remember)localStorage.setItem(storageKey,JSON.stringify({version:1,assignments,autoSkin}));
       else localStorage.removeItem(storageKey);
       storageWarning='';
     }catch(e){storageWarning='Preferences could not be saved. This session still works.';}
@@ -41,6 +36,7 @@
     const saved=JSON.parse(localStorage.getItem(storageKey)||'null');
     if(saved?.version===1){
       remember=true;
+      if(registry.has(saved.autoSkin)){autoSkin=saved.autoSkin;enabled=true;}
       for(const club of clubs){
         if(saved.assignments?.[club]==='original'||registry.has(saved.assignments?.[club]))assignments[club]=saved.assignments[club];
         else if(saved.assignments?.[club]==='nebula')storageWarning='The retired skin was removed. Its clubs now use Original; your other assignments are unchanged.';
@@ -83,17 +79,17 @@
   function reconcile(){
     if(disposed||busy)return;busy=true;
     try{
-      if(enabled&&!everAttached&&Date.now()-started>1800000){enabled=false;expired=true;}
+      if(enabled&&!autoSkin&&!everAttached&&Date.now()-started>1800000){enabled=false;expired=true;}
       if(!enabled){restoreAll();return;}
-      const targets=scan(),roots=new Map(targets.map(t=>[t.root,t]));autoClub=autoSkin?localClub(targets):'';
+      const targets=scan(),roots=new Map(targets.map(t=>[t.root,t]));autoRoots=new Set();autoClub=autoSkin?localClub(targets):'';
       for(const [root,row]of [...attached]){
         const target=roots.get(root);
-        if(!target||target.club!==row.club||wanted(row.club)!==row.skin||['failed-restored','restore-error','expired'].includes(row.controller.status().phase))release(root);
+        if(!target||target.club!==row.club||wanted(target)!==row.skin||['failed-restored','restore-error','expired'].includes(row.controller.status().phase))release(root);
       }
       // A restore error blocks new native writes, rather than piling up swaps.
       if(error)return;
       for(const target of targets){
-        const skin=wanted(target.club);
+        const skin=wanted(target);
         if(skin==='original'||attached.has(target.root)||failures.has(target.root))continue;
         let controller;
         try{
@@ -132,7 +128,7 @@
     for(const club of clubs)assignments[club]=skin;
     failures.clear();save();reconcile();return state();
   }
-  function reset(){if(!restore())return false;autoSkin='';autoClub='';assignments=Object.fromEntries(clubs.map(c=>[c,'original']));failures.clear();save();notify();return true;}
+  function reset(){if(!restore())return false;autoSkin='';autoClub='';autoRoots.clear();assignments=Object.fromEntries(clubs.map(c=>[c,'original']));failures.clear();save();notify();return true;}
   function key(e){if(e.ctrlKey&&e.altKey&&e.shiftKey&&e.code==='KeyH'){e.preventDefault();restore();}}
   function dispose(){if(!restore())return false;disposed=true;clearInterval(timer);window.removeEventListener('keydown',key,true);listeners.clear();return true;}
   // Migrate only after all signatures/preflight have succeeded; never reload the activity.
@@ -145,7 +141,7 @@
   }
   window.addEventListener('keydown',key,true);
   timer=setInterval(reconcile,1200);
-  window.__bobbleWardrobeEngine=Object.freeze({clubs,state,setEnabled,assign,assignAll,restore,reset,auto(skin){if(skin&&!registry.has(skin))throw Error('Unknown skin');autoSkin=skin||'';autoClub='';failures.clear();reconcile();return state();},retry(){failures.clear();error='';reconcile();},
+  window.__bobbleWardrobeEngine=Object.freeze({clubs,state,setEnabled,assign,assignAll,restore,reset,auto(skin){if(skin&&!registry.has(skin))throw Error('Unknown skin');autoSkin=skin||'';autoClub='';autoRoots.clear();failures.clear();save();reconcile();return state();},retry(){failures.clear();error='';reconcile();},
     remember(value){remember=!!value;save();notify();},subscribe(fn){listeners.add(fn);fn(state());return()=>listeners.delete(fn);},
     previewData(id){return registry.get(id)?.data||null;},
     register(skin){

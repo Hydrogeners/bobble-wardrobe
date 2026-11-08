@@ -1,0 +1,33 @@
+{
+  "repository": "https://github.com/Hydrogeners/bobble-recorder",
+  "commit": "def896d4caef38776714dafbad888c6731835263",
+  "version": "0.3.0",
+  "normalization": "SHA-256 of UTF-8 source with CRLF normalized to LF",
+  "files": {
+    "CHANGELOG.md": "c99e47c460b05aeaaf2e4c0ef58ffe806ace59f9155d89204398b5f2bde12915",
+    "README.md": "b68f085a8f0292a4f2859ed4442150f34a08a984d6f5c38d7912ccd3d08d4977",
+    "Start clip sharing.cmd": "22d6ae4ec8ebae68edce1f83f3e5879126c5c492458fe588328383576608d514",
+    "integration/bl-recorder-main.js": "2adb8bb21330c4870b85549f83753ad1d846acdcddef2c61b4e7d00cdfa325b7",
+    "package.json": "99e46d58c6ba6c595548f788ac08233ea1c107af72a581dcf6583b129f8fc773",
+    "replay_lab/clip_share.js": "14fe654d6c8e26d8786e6e1e65764eaa83ef5bba17d059b00a43c2a0692377d4",
+    "replay_lab/index.html": "a8b92af4384c6bf14321c69f3667b2db3f0c7731b43903dc9ada44659710d2e0",
+    "replay_lab/native_reader.js": "c37043cc1be2ca78c582e18f7ebccf44764575eaab91cd3dddd007f780455907",
+    "replay_lab/video.js": "2977f74e48e4c5c82fea30321f061d157f33d7e680004b9c01007bac93ebad36",
+    "replay_lab/video_clip.js": "b8fb0bd567b4209317fa3a7326c16a0fd790d57ef8c79c85c049d50340c91448",
+    "replay_lab/video_index.js": "6305a9526814c76cfd8d22a8e486ffd33974b9829d17c35dd81ae637d37e5e8e",
+    "replay_lab/video_offline.js": "a0663f8874ca6280d318d2e2e4f6823d949ae8bd2812751cf29c4ac891f462d6",
+    "replay_lab/video_runtime.js": "42cd01b2108a2f77825b56975d171a9555ad8d2fa701b634d33085ddfa30b87f",
+    "replay_lab/video_store.js": "fc06995abd145ac08630700084f5a77bde1dea2ae0cee2da8581d0ee12916589",
+    "replay_lab/video_ui.js": "c5353c5f36e4c9dd58f9ea950f7c6274f2539313d9cb95c450add014d0156d7c",
+    "tools/build_recorder.py": "0de7768a1e5461c8a19cb8f91696f8aa936d930c90249d0e6b94ae43ec17c5ea",
+    "tools/clip_host.cjs": "8932d867095589ff94e4be45183bbe1fa0da0f01e361950a232303e054c9c6d1",
+    "tools/unity_hook.js": "bac48c506934c9ed67096e23becc77a7f0d645f1f755189137ebc6e5cd93d449",
+    "validation/clip-host.test.cjs": "36740774ec009e649e1508f31a8881443dceb7600f56f74a3d666da0b769bdd4",
+    "validation/distribution.test.cjs": "795f38dbe76d39e1f9e1446fc3ebcc3a19509922fbc907eb54482f4504859632",
+    "validation/native-lifecycle.test.cjs": "0e20c760b5c9659013e5936f0d3508c7d78ad86e95b33ed0f4b7a476ee5727ad",
+    "validation/video-browser.test.cjs": "2a31ab059d3e3a3a820d65393872e7052bdb2181700cd301843c4a386caa807f",
+    "validation/video-offline.test.cjs": "39f76efcdf2dd5ed86bcf46ddd6277864db4e69529e29be814c57b9c027db614",
+    "validation/video-recorder.test.cjs": "a694914cf123ae842d242514f6bff92cc5437b0b6818617ec6d8f9a1290cf515",
+    "validation/video-storage.test.cjs": "64c926bfc49c50bda90de1556c2b64a561c28d72000004ff775580909738c933"
+  }
+}
