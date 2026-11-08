@@ -12,4 +12,12 @@ for(const vertices of [0,-1,65536,1.5]){const bad=fixture();bad.test.parts.head.
 {const bad=fixture();bad.test.parts.head.uv='';assert.throws(()=>ctx.expand(bad),/length/);}
 {const bad=fixture();bad.test.geometryEncoding='other';assert.throws(()=>ctx.expand(bad),/Unknown/);}
 assert.equal(ctx.expand({classic:{revision:3}}).classic.revision,3);
+{
+ const side=1024,count=side*side,source=Buffer.alloc(count*4),packed=Buffer.alloc(count*4);
+ for(let y=0;y<side;y++)for(let x=0;x<side;x++)for(let c=0;c<4;c++){const i=y*side+x;source[i*4+c]=(x*7+y*3+c*59)&255;packed[c*count+i]=(source[i*4+c]-(x?source[(i-1)*4+c]:0))&255;}
+ const data={paletteEncoding:'rgba-row-delta-byteplanes',textureSize:1024,palette:packed.toString('base64')};
+ const result=ctx.expand({texture:data}).texture;assert.deepEqual(Buffer.from(result.palette,'base64'),source);assert.equal(result.paletteEncoding,undefined);
+ assert.throws(()=>ctx.expand({bad:{...data,paletteEncoding:'other'}}),/Unknown palette/);
+ assert.throws(()=>ctx.expand({bad:{...data,paletteEncoding:'rgba-row-delta-byteplanes',palette:''}}),/palette length/);
+}
 console.log('PASS: compact geometry round-trip, signed limits, malformed-data rejection and classic compatibility');

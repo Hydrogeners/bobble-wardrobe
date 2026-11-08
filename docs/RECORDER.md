@@ -1,6 +1,9 @@
 # Recorder · third addon in Bobble Addons
 
 Install once through the launcher, then open Bobble League → **Recordings**.
+Preview 7 puts **Turn on auto-record** in a fixed control row, outside all library
+and playback scrolling. Normal playback/save/clip-entry controls fit desktop,
+compact and mobile views; expanded trimming and long libraries can still scroll.
 The recorder starts **off**. Read **Read first**, then enable auto-record for
 matches you participate in. It captures silent game-canvas WebM, not desktop,
 microphone or voice chat. It does not predict, simulate or automate gameplay.

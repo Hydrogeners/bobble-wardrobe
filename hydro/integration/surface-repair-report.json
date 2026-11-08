@@ -1,0 +1,144 @@
+{
+  "hydro": {
+    "beforeSHA256": "d239d64fbd49c7d37a5ca5d74c2addc3bdc7319e19f91d2be7d96f8adc811c98",
+    "afterSHA256": "b7876ee88a4409d0de8cc24259328126c8bffa52b8bdff1c3993f666f4cbdd43",
+    "changes": {
+      "revision": 19,
+      "reversedTriangles": {
+        "head": 159,
+        "body": 73,
+        "base": 0
+      },
+      "sourceAtlasSize": 2048,
+      "textureSize": 1024,
+      "artRGBStep": 8
+    }
+  },
+  "miko": {
+    "beforeSHA256": "f13f635ccad57c0167f058ea7c6a25a7b27ca2bdae0fffc651a6e7f406dc9c41",
+    "afterSHA256": "82bc54df97bbaaee0b81d10f49e3605252cda93bb4999d114c57e5fe2e542e2c",
+    "changes": {
+      "revision": 19,
+      "reversedTriangles": {
+        "head": 185,
+        "body": 95,
+        "base": 0
+      },
+      "sourceAtlasSize": 2048,
+      "textureSize": 1024,
+      "artRGBStep": 8
+    }
+  },
+  "todo": {
+    "beforeSHA256": "8da27e6762948ff93ba562a393557758769a8c509f6f62a892026e5e5b7da815",
+    "afterSHA256": "53c3148689c846735570d004047b384dd16a16bf87e5a3f25be513d2b5ebd0cd",
+    "changes": {
+      "revision": 19,
+      "reversedTriangles": {
+        "head": 173,
+        "body": 246,
+        "base": 0
+      },
+      "sourceAtlasSize": 2048,
+      "textureSize": 1024,
+      "artRGBStep": 8
+    }
+  },
+  "jjcho": {
+    "beforeSHA256": "60d7b26e0d03fed83b8b0cad7ae2a9293cea2a935f2afb0707837e4325a26385",
+    "afterSHA256": "879e169f50f37f6bcbc73a5260051f0ed29a98e0576807b6583de3b8b70840a9",
+    "changes": {
+      "revision": 19,
+      "reversedTriangles": {
+        "head": 88,
+        "body": 94,
+        "base": 0
+      },
+      "sourceAtlasSize": 2048,
+      "textureSize": 1024,
+      "artRGBStep": 8,
+      "headVertical": 1.12
+    }
+  },
+  "augusto": {
+    "beforeSHA256": "1e56f96cefc573381fffebf2991e9016e24b4458def3ee38c7459071e0417460",
+    "afterSHA256": "5dbdce67502d9b9a0c61f6827fe9e4f36116c9a5e06c1f3392c96c24790a7a9e",
+    "changes": {
+      "revision": 19,
+      "reversedTriangles": {
+        "head": 156,
+        "body": 70,
+        "base": 0
+      },
+      "sourceAtlasSize": 2048,
+      "textureSize": 1024,
+      "artRGBStep": 8,
+      "headShape": [
+        1.1,
+        0.94,
+        1
+      ]
+    }
+  },
+  "flair": {
+    "beforeSHA256": "72266dac95d742b1b708aa11cc4a810eb625863a07d3b6ed5252a198fd195daa",
+    "afterSHA256": "eaf0e37570b72f1739dbaee27f7e8f41f24c94741041cdf6ba1facfaeeffdab3",
+    "changes": {
+      "revision": 19,
+      "reversedTriangles": {
+        "head": 68,
+        "body": 133,
+        "base": 0
+      },
+      "sourceAtlasSize": 2048,
+      "textureSize": 1024,
+      "artRGBStep": 8
+    }
+  },
+  "supa": {
+    "beforeSHA256": "82eb172a2af55f47358b973a1269e9a6745145967b22d7fd2716e599816b4a02",
+    "afterSHA256": "ab5ccab1c4d38bd7ab1e30345b9ea98234b3fdd3d35984445b57a03f5eaaba3d",
+    "changes": {
+      "revision": 19,
+      "reversedTriangles": {
+        "head": 126,
+        "body": 106,
+        "base": 0
+      },
+      "sourceAtlasSize": 2048,
+      "textureSize": 1024,
+      "artRGBStep": 8
+    }
+  },
+  "duolingo": {
+    "beforeSHA256": "01c4dec61b01ed2ab203c5f59f13f9eaf8fbccb17cffb70d00d6d602b697d2cf",
+    "afterSHA256": "1ce3262d1dd4ab239ec379bfaf6c9aaf3ea16496fda0fd98e540f81be8c4e9f3",
+    "changes": {
+      "revision": 19,
+      "reversedTriangles": {
+        "head": 92,
+        "body": 59,
+        "base": 0
+      },
+      "sourceAtlasSize": 2048,
+      "textureSize": 1024,
+      "artRGBStep": 8,
+      "coatFrontVertices": 5718
+    }
+  },
+  "spark": {
+    "beforeSHA256": "b80057c8383887875393a077b189b5f0846f8dea54b8087f172553b0ee1baa39",
+    "afterSHA256": "6660ab7accafaa044f8c5b12eaa4c7a0e4909f7186453b78d3d32bca5fe64913",
+    "changes": {
+      "revision": 19,
+      "reversedTriangles": {
+        "head": 123,
+        "body": 50,
+        "base": 0
+      },
+      "sourceAtlasSize": 2048,
+      "textureSize": 1024,
+      "artRGBStep": 8
+    }
+  }
+}

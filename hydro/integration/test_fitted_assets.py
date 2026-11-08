@@ -30,7 +30,7 @@ class FittedAssetTests(unittest.TestCase):
                 self.assertEqual(data['revision'],3)
                 self.assertTrue(data['fullGeometry'])
                 self.assertEqual(set(data['parts']),{'head','body','base'})
-                side=512 if QUALITY else 256
+                side=(1024 if 'surfaceRepair' in data else 512) if QUALITY else 256
                 self.assertEqual(len(base64.b64decode(data['palette'])),side*side*4)
                 measured=audit.audit(data)
                 total=0
@@ -44,7 +44,7 @@ class FittedAssetTests(unittest.TestCase):
                     self.assertLess(max(indices),part['vertices'])
                     # End each part at the same rest-pose cut planes.
                     bounds=measured['parts'][kind]['boundsWorldRest']
-                    limits=({'base':(0,1),'body':(.17 if name=='augusto' else .5457,1.173),'head':(1.0416,2.40)} if QUALITY else {'base':(.05,.95),'body':(.68,1.20),'head':(1.20,2.15)})[kind]
+                    limits=({'base':(0,1),'body':(.17 if name=='augusto' else .435 if name=='duolingo' and 'surfaceRepair' in data else .5457,1.173),'head':(1.0416,2.40)} if QUALITY else {'base':(.05,.95),'body':(.68,1.20),'head':(1.20,2.15)})[kind]
                     self.assertGreaterEqual(bounds[0][1],limits[0]-.002)
                     self.assertLessEqual(bounds[1][1],limits[1]+.002)
                 self.assertLess(total,90000 if QUALITY else 18000)

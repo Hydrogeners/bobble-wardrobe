@@ -42,7 +42,7 @@ window.__transformBobblePreviewPart=function(p,n,kind){
 };
 window.__bobbleTextureSize=function(data){
   const size=data.textureSize===undefined?32:data.textureSize;
-  if(![32,128,192,256,512].includes(size))throw Error('Unsupported cosmetic texture size');
+  if(![32,128,192,256,512,1024].includes(size))throw Error('Unsupported cosmetic texture size');
   return size;
 };
 window.__createBobblePreview=function(canvas,onError){
@@ -247,8 +247,8 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
   // Pop-out/reparenting can otherwise amplify a percentage/intrinsic-size cycle.
   accentStyle.textContent+=`.collection{align-self:start;min-height:0}.stage{flex:none;height:clamp(225px,34dvh,280px);grid-template-rows:minmax(0,1fr)}.preview-viewport{position:relative;height:100%;min-width:0;min-height:0;overflow:hidden;contain:strict}.preview-viewport canvas{position:absolute;inset:0;width:100%;height:100%;min-height:0;max-height:100%}`;
   const previewCanvas=$('canvas'),viewport=document.createElement('div');viewport.className='preview-viewport';previewCanvas.before(viewport);viewport.append(previewCanvas);
-   const lab=document.createElement('details');lab.className='accent-lab';lab.innerHTML=`<summary>Preview colors <span>Optional · preview only</span></summary>
-    <div class="accent-heading"><h4>Accent Lab</h4><span>Halo + aim trail</span></div>
+    const lab=document.createElement('div');lab.className='accent-lab';lab.setAttribute('role','group');lab.setAttribute('aria-label','Halo and aiming arrow');lab.innerHTML=`
+     <div class="accent-heading"><h4>Halo &amp; aiming arrow</h4><span>Preview only</span></div>
     <div class="accent-colors"><div class="accent-color"><input type="color" id="halo-color" aria-labelledby="halo-label"><div><label id="halo-label" for="halo-color">Selection halo</label><output id="halo-hex" for="halo-color"></output></div></div><div class="accent-color"><input type="color" id="aim-color" aria-labelledby="aim-label"><div><label id="aim-label" for="aim-color">Aiming arrow</label><output id="aim-hex" for="aim-color"></output></div></div></div>
     <div class="accent-presets" role="group" aria-label="Accent color presets"><button type="button" data-preset="hydro"><i style="--sample:#19b9ce" aria-hidden="true"></i>Hydro</button><button type="button" data-preset="aurora"><i style="--sample:#9865d9" aria-hidden="true"></i>Aurora</button><button type="button" data-preset="ember"><i style="--sample:#db6835" aria-hidden="true"></i>Ember</button><button type="button" data-preset="ice"><i style="--sample:#629ec7" aria-hidden="true"></i>Ice</button></div>
     <div class="accent-actions"><button type="button" id="apply-accents">Apply accents</button><button class="link" type="button" id="reset-accents">Reset colors</button></div>
@@ -265,7 +265,7 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
      #auto-team-note{min-height:36px;margin:8px 0 0}.club-label{margin-top:12px}
      .club-overrides{border-top:1px solid var(--edge);margin-top:20px;padding-top:10px}.club-overrides summary,.accent-lab summary{cursor:pointer;font-size:13px;font-weight:600;min-height:36px;padding:8px 0}
      summary:focus-visible{outline:3px solid var(--leaf);outline-offset:3px}.club-overrides .fine{margin-bottom:14px}.club-overrides .link{line-height:1.5;white-space:normal;margin-top:8px}.assigned{margin-bottom:8px;min-height:0}.secondary{min-height:36px}
-     .accent-lab summary span{font-size:11px;font-weight:400;color:var(--muted);margin-left:8px}.accent-lab[open] summary{margin-bottom:12px}.accent-heading{display:none}
+      .accent-heading{display:flex;flex-wrap:wrap}.accent-heading h4{font-size:16px}.accent-heading span{font-size:11px;color:var(--muted)}
      .collection{align-self:stretch}.stage{height:clamp(260px,42dvh,360px)}.skin-title h3{font-size:26px;font-weight:500}.description{line-height:1.6;max-width:45ch}
      .remember{font-size:12px;line-height:1.5;cursor:pointer}.remember input{width:16px;height:16px}.view-tools button{min-height:36px;min-width:36px}.close{min-height:40px;min-width:40px}
      footer{gap:12px}.status{line-height:1.5}.notice{margin-top:14px;line-height:1.6}
@@ -281,7 +281,7 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
   }
   let open=false,index=0,lastFocus=null,viewer=null,previewID='',state=engine.state(),disposed=false,lastStatus='';
    for(const key of engine.clubs){const o=document.createElement('option');o.value=key;o.textContent=catalog[key]?.name||key;club.append(o);}
-   for(const skin of state.catalog){const o=document.createElement('option');o.value=skin.id;o.textContent=skin.name;$('#skin-picker').append(o);}
+    for(const skin of state.catalog){const o=document.createElement('option');o.value=skin.id;o.textContent=skin.name.toUpperCase();$('#skin-picker').append(o);}
   for(const [key,c]of Object.entries(catalog))if(c.supported===false){const o=document.createElement('option');o.value=key;o.textContent=c.name+' · unsupported';o.disabled=true;club.append(o);}
   club.value=engine.clubs.find(c=>state.assignments[c]!=='original')||engine.clubs[0];
   function previewError(message){$('.preview-error').hidden=!message;$('.preview-error').textContent=message;}
@@ -301,7 +301,7 @@ window.__createBobbleSoftwarePreview=function(canvas,onError){
     const previous=selected()?.id;state=s;index=Math.min(index,Math.max(0,s.catalog.length-1));
     if(previous&&s.catalog.some(x=>x.id===previous))index=s.catalog.findIndex(x=>x.id===previous);
     const skin=selected(),current=s.assignments[club.value],currentSkin=s.catalog.find(x=>x.id===current);
-    $('#skin-name').textContent=skin?.name||'No skins installed';$('#skin-description').textContent=skin?.description||'Register a prepared skin to begin.';
+    $('#skin-name').textContent=skin?.name?.toUpperCase()||'No skins installed';$('#skin-description').textContent=skin?.description||'Register a prepared skin to begin.';
      $('#skin-index').textContent=s.catalog.length?String(index+1).padStart(2,'0')+' / '+String(s.catalog.length).padStart(2,'0'):'00 / 00';
      $('#skin-picker').value=skin?.id||'';$('#skin-picker').disabled=!skin;
     for(const id of ['#previous','#next']){$(id).disabled=s.catalog.length<2;$(id).title=s.catalog.length<2?'One skin installed. More skins will appear here when added.':'';}

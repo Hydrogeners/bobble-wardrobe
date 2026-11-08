@@ -4,6 +4,19 @@
   if(location.origin!=='https://947957217959759964.discordsays.com')return;
   if(window.__wardrobePortableBoot)return;
   const state={phase:'waiting-for-unity',error:'',timer:0,captureCalls:0,captureReturns:0};window.__wardrobePortableBoot=state;
+  // BEGIN TRACKER INPUT GUARD
+  // Installed BEFORE Unity starts. Shadow DOM retargets inputs to their host;
+  // Unity can otherwise prevent normal text entry at window capture time.
+  const trackerInputGuard=event=>{
+    const target=event.composedPath?.()[0];
+    if(target?.getRootNode?.()?.host?.id!=='bobble-power-tracker'||!(['INPUT','TEXTAREA','SELECT'].includes(target.tagName)||target.isContentEditable))return;
+    if(event.type==='keydown'&&event.key==='Escape'){
+      event.preventDefault();window.__bobblePowerTracker?.editNames?.(false);
+    }
+    event.stopImmediatePropagation(); // Do NOT prevent normal editing defaults.
+  };
+  for(const type of ['keydown','keyup','keypress','pointerdown','pointerup','mousedown','mouseup','click','touchstart','touchend'])window.addEventListener(type,trackerInputGuard,true);
+  // END TRACKER INPUT GUARD
   const payload=__WARDROBE_PAYLOAD_STRING__;
   let instance=null,creator=null;
   function adopt(value){if(value?.Module){instance=value;window.__blUnity=value;}}

@@ -7,6 +7,7 @@ from pathlib import Path
 import unittest
 import numpy as np
 from native_scale import fit_native_parts,read,ORIGIN,HEAD_WIDTH,BODY_WIDTH,HEAD_LOW
+from test_surface_repairs import seed
 
 ROOT=Path(__file__).parent
 BACKUP=ROOT.parent/'assets'/'quality-payload-11-json'
@@ -18,7 +19,9 @@ class NativeScaleTests(unittest.TestCase):
             with self.subTest(name=name):
                 source=BACKUP/f'visual-{name}-quality.json'
                 before=json.loads(source.read_text() if source.exists() else gzip.decompress(source.with_suffix('.json.gz').read_bytes()))
-                after=json.loads((ROOT/f'visual-{name}-quality.json').read_text())
+                # Native-fit stage remains tested byte-for-byte. Later requested
+                # art changes are independently checked by test_surface_repairs.
+                after=seed(name)
                 expected=copy.deepcopy(before['parts'])
                 metadata=fit_native_parts(expected)
                 for kind in ['head','base']:

@@ -1,4 +1,9 @@
-# Quality models · retained from Preview 5 in Preview 6 / payload 17
+# Quality models · Preview 7 / payload 19
+
+Preview 7 retains the nine-character catalog with [targeted surface, texture and
+proportion changes](PREVIEW-7.md). Original rollback seeds are preserved with
+SHA-256 records. Historical Preview 5/6 art notes follow; their face-preservation
+claims describe those earlier stages, not Preview 7's explicitly requested edits.
 
 Nine textured Meshy-derived character adaptations are included. The retired
 tenth skin is no longer bundled/selectable; its saved assignments fall back to

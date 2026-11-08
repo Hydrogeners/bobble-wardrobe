@@ -99,7 +99,7 @@ def main():
     label(future,'A tiny checklist inside the activity. Click a name or use 1–4 to mark an observed power.\nManual only; no automatic detection.',C['white'],C['muted'],('Segoe UI',10),wraplength=290).pack(anchor='w',padx=20)
     tracker_actions=tk.Frame(future,bg=C['white']);tracker_actions.pack(fill='x',padx=20,pady=(8,14))
     tracker_install=ttk.Button(tracker_actions,text='Install / update all three',style='Quiet.TButton');tracker_install.pack(side='left')
-    label(future,'In Bobble League → Powers. Hide anytime.\nNames and preferences save; match marks do not.',C['white'],C['muted'],('Segoe UI',9),wraplength=290).pack(anchor='w',padx=20,pady=(0,12))
+    label(future,'In Bobble League → Power Tracker.\nChoose Edit names to rename players.',C['white'],C['muted'],('Segoe UI',9),wraplength=290).pack(anchor='w',padx=20,pady=(0,12))
 
     recorder_card=tk.Frame(library,bg=C['white'],highlightbackground=C['line'],highlightthickness=1);recorder_card.grid(row=0,column=1,sticky='nsew',padx=(6,0))
     label(recorder_card,'Recorder',C['white'],C['text'],('Segoe UI',17,'bold')).pack(anchor='w',padx=20,pady=(12,3))
@@ -154,7 +154,7 @@ def main():
             if not chosen:raise RuntimeError('No Discord installation selected')
             if not getattr(sys,'frozen',False):raise RuntimeError('Use the packaged portable executable to install its self-contained background helper.')
             install_persistent(manager,Path(sys.executable),resources=Path(chosen))
-            return 'All three add-ons installed with signed automatic updates. Open Discord normally, then Bobble League: Wardrobe, Powers or Recordings. Recorder starts off. Save important videos to Downloads; cached and unfinished videos can be lost. Optional public sharing: install Node.js 22+ and select Start clip sharing here.'
+            return 'All three add-ons installed with signed automatic updates. Open Discord normally, then Bobble League: Wardrobe, Power Tracker or Recordings. Choose Edit names in Power Tracker to rename players. Recorder starts off. Save important videos to Downloads; cached and unfinished videos can be lost. Optional public sharing: install Node.js 22+ and select Start clip sharing here.'
         if remove and not messagebox.askyesno('Remove all three add-ons?','This removes Wardrobe, Power Tracker and Recorder from the shared installation, and stops this launcher’s clip helper.\n\nFully quit Discord first. Save important recordings and check Downloads. This does not delete downloaded videos or revoke public clip links.'):
             return
         begin(work,'Removing all three add-ons…' if remove else 'Installing all three add-ons…',quiet=False)

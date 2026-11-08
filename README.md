@@ -5,7 +5,7 @@ An **open-source, unofficial Windows launcher** with three Bobble League add-ons
 
 ## Download
 
-**[Download Preview 6](https://github.com/Hydrogeners/bobble-wardrobe/releases/tag/v0.1.0-preview.6)** · [Build it yourself](docs/BUILD.md) · [Security and privacy](SECURITY.md)
+**[Download Preview 7](https://github.com/Hydrogeners/bobble-wardrobe/releases/tag/v0.1.0-preview.7)** · [Build it yourself](docs/BUILD.md) · [Security and privacy](SECURITY.md)
 
 > **Development preview, not a finished product.** Native in-match attachment,
 > Discord pop-out behavior and fresh-machine installation still need validation.
@@ -16,15 +16,15 @@ An **open-source, unofficial Windows launcher** with three Bobble League add-ons
 
 1. Fully quit Discord Stable from its system tray menu.
 2. Open `BobbleWardrobe-Preview.exe`, select your installation, and choose **Install activity mods** or **Update / repair mods**.
-3. Reopen Discord and launch Bobble League. Use **Wardrobe**, **Powers**, or **Recordings**.
+3. Reopen Discord and launch Bobble League. Use **Wardrobe**, **Power Tracker**, or **Recordings**.
    Recorder starts off; turn on auto-record only after reading its storage warnings.
 
-**Already installed?** Helpers on the quality feed receive payload **17** after a
-full Discord exit. Preview 5 launchers can discover the signed Preview 6 launcher
-update. Download Preview 6 directly if necessary. Choose **Update / repair mods**
+**Already installed?** Helpers on the quality feed receive payload **19** after a
+full Discord exit. Preview 5+ launchers can discover the signed Preview 7 launcher
+update. Download Preview 7 directly if necessary. Choose **Update / repair mods**
 with Discord fully closed to upgrade the resident helper too.
 
-**Preview 1–3 users:** download Preview 6 once and choose **Install activity mods**
+**Preview 1–3 users:** download Preview 7 once and choose **Install activity mods**
 with Discord fully closed to migrate to the quality feed. Their smaller legacy
 feed stays unchanged; old executables cannot learn binary auto-updating remotely.
 
@@ -34,13 +34,16 @@ conflicts are retained rather than overwritten. See [how it works](docs/ARCHITEC
 
 ## Skins
 
-- **Hydro, MIKO, TODO, JJCHO, AUGUSTO, FLAIR, SUPA, DUOLINGO and Spark:** textured
+- **HYDRO, MIKO, TODO, JJCHO, AUGUSTO, FLAIR, SUPA, DUOLINGO and SPARK:** textured
   quality models with reference-specific rolling bases, repaired surface
   orientation and corrected head/body/ball dimensions.
 
-Preview 6 bundles payload **17**, retaining Preview 5's straighter pearl cloak, gold chest panel and
-pointed white center for AUGUSTO; targeted outfit cleanup across all nine; refined
-rolling-base colors and patterns. Facial geometry and source winding are retained.
+Preview 7 bundles payload **19**: taller JJCHO head, broader/shorter cartoon
+proportions for AUGUSTO, and an extended DUOLINGO lower-coat front (scarf retained).
+Higher-detail textures reduce seam lines; strongly reversed tiny triangles are
+corrected without deleting faces or welding UV islands. Original rolling-base
+artwork and saved assignments remain. **Halo & aiming arrow** controls are always
+visible and explicitly preview-only; in-game recoloring remains unsupported.
 The retired tenth skin is no longer bundled or selectable; its old assignments
 fall back to Original with a notice. Other saved assignments remain intact. See
 [quality-model notes and remaining limitations](docs/QUALITY-MODELS.md).
@@ -59,7 +62,8 @@ proof of correct native appearance in every match.
 A small draggable checklist inside the activity, not a desktop overlay. Click a
 player or use **1–4** to mark/unmark an observed power box. It is manual: no
 automatic power detection or game-memory reads. Names, shortcuts, theme and
-placement can be customized; match marks never persist. Shortcuts pause while
+placement can be customized; choose **Edit names**, type replacements and **Save**.
+Game keyboard capture is blocked for these fields. Match marks never persist. Shortcuts pause while
 hidden, typing, editing settings, or another add-on owns focus. Wardrobe and the
 tracker and recorder have independent state but share one loader; **Uninstall all three** removes
 that shared integration. See [controls, limitations and BLPT attribution](launcher/POWER-TRACKER.md).
@@ -70,7 +74,10 @@ Included in the same executable and shared activity install. Silent game-canvas
 recording, post-match playback/seeking, timestamps, full-video saving and clips up
 to 90 seconds. Compact defaults target **~450 MB/hour**, with **~270 MB/hour**
 Smallest available. Smaller files can soften fast motion; these are estimates,
-not file-size guarantees. Recording is off until you enable it.
+not file-size guarantees. Recording is off until you enable it. The always-visible
+**Turn on auto-record** control sits above the scrolling content. Normal playback,
+save and clip-entry controls fit desktop/compact/mobile views without scrolling;
+expanded trim tools and long libraries may still scroll.
 
 Disk mode writes chunks with a bounded 32 MB queue and 8 GB library budget.
 Completed videos can recover for the same verified account. **Cache is not a
@@ -123,9 +130,10 @@ verification, **not** Windows Authenticode; SmartScreen may still appear.
 - [`hydro/integration/`](hydro/integration/): guarded Unity cosmetic controller,
   skin manager, showroom, preview renderer, asset preparation and tests.
 - [`launcher/launcher_updates.py`](launcher/launcher_updates.py): signed binary verification and handoff.
-- [`launcher/bundle/`](launcher/bundle/): exact three-addon JS payloads supplied by Preview 6.
+- [`launcher/bundle/`](launcher/bundle/): exact three-addon JS payloads supplied by Preview 7.
 - [`recorder/`](recorder/): allowlisted recorder-only source pinned by `UPSTREAM.json`; no private code.
-- [`docs/RELEASE-PREVIEW-6.json`](docs/RELEASE-PREVIEW-6.json): current executable/payload hashes.
+- [`docs/RELEASE-PREVIEW-7.json`](docs/RELEASE-PREVIEW-7.json): current executable/payload hashes.
+- [`docs/RELEASE-PREVIEW-6.json`](docs/RELEASE-PREVIEW-6.json): preserved Preview 6 executable/payload hashes.
 - [`docs/RELEASE-PREVIEW-5.json`](docs/RELEASE-PREVIEW-5.json): preserved previous executable/payload hashes.
 - [`docs/RELEASE-PREVIEW-4.json`](docs/RELEASE-PREVIEW-4.json): executable/payload hashes.
 - [`docs/RELEASE-PREVIEW-3.json`](docs/RELEASE-PREVIEW-3.json): preserved earlier record.

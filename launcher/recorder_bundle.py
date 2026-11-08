@@ -15,11 +15,18 @@ def verify_source(root:Path):
     record=json.loads((root/'UPSTREAM.json').read_text(encoding='utf-8'))
     if record['commit']!=UPSTREAM_COMMIT or record['version']!='0.3.0':
         raise ValueError('Review recorder provenance before changing its pinned version')
+    patch_file=root/'LOCAL-PATCHES.json'
+    patches=json.loads(patch_file.read_text(encoding='utf-8')) if patch_file.exists() else {}
+    if set(patches)-{'replay_lab/video_ui.js'}:raise ValueError('Only the reviewed recorder layout patch is allowed')
     for name,digest in record['files'].items():
         relative=Path(name)
         if relative.is_absolute() or '..' in relative.parts:raise ValueError('Unsafe recorder source path')
         data=(root/relative).read_bytes().replace(b'\r\n',b'\n')
-        if hashlib.sha256(data).hexdigest()!=digest:raise ValueError('Recorder source differs from reviewed upstream: '+name)
+        patch=patches.get(name)
+        if patch:
+            if patch['upstreamSHA256']!=digest:raise ValueError('Recorder patch provenance mismatch')
+            digest=patch['patchedSHA256']
+        if hashlib.sha256(data).hexdigest()!=digest:raise ValueError('Recorder source differs from reviewed upstream/patch: '+name)
     return record
 
 def compose(wardrobe:str,root:Path)->str:

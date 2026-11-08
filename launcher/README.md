@@ -1,4 +1,10 @@
-# Bobble Addons · Preview 6
+# Bobble Addons · Preview 7
+
+Current release: payload **19**. [Preview 7 changes](../docs/PREVIEW-7.md) include
+Power Tracker name editing, always-visible Halo & aiming arrow controls, model
+surface/proportion repairs, and a recorder auto-record toggle outside scrolling
+content. Existing Preview 5/6 installations upgrade without uninstalling; fully
+quit Discord and choose **Update / repair mods**. Older release details follow.
 
 Preview 6 includes **Wardrobe, Power Tracker and Recorder in one install**.
 The minimal in-activity tracker is rebuilt from organpy/BLPT; see

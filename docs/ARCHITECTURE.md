@@ -50,9 +50,11 @@ standalone Unity hook and Electron wrapper are not duplicated; all three use the
 existing activity bootstrap. Cosmetic initialization failure does not prevent
 the recorder from starting. Native readers are read-only; recording starts off.
 
-The only build-time recorder adaptation is user-facing sharing instructions that
+Build-time recorder sharing instructions
 refer to the combined launcher's **Start clip sharing** action rather than the
-standalone `.cmd`. The optional localhost worker is the reviewed Node helper,
+standalone `.cmd`. `recorder/LOCAL-PATCHES.json` additionally records original and
+patched SHA-256 for the reviewed UI-only layout change; unlisted source changes
+are refused. Capture/lifecycle code is unchanged. The optional localhost worker is the reviewed Node helper,
 explicitly started by `recorder_helper.py` only on user request. It binds
 127.0.0.1:8789, requires Node.js 22+, and stops when its owning launcher closes.
 It never auto-starts with Discord/Windows and never uploads without per-clip consent.

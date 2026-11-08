@@ -1,0 +1,7 @@
+{
+  "replay_lab/video_ui.js": {
+    "upstreamSHA256": "c5353c5f36e4c9dd58f9ea950f7c6274f2539313d9cb95c450add014d0156d7c",
+    "patchedSHA256": "2b1864dee6bb5be20012cfa800334830d596145de6b58fa01abbca585171ae7d",
+    "reason": "Keep auto-record visible outside scrolling regions; viewport-sized playback, compact library; recorder capture/privacy behavior unchanged."
+  }
+}

@@ -48,6 +48,14 @@
     .retention{flex:none;margin:0;padding:9px 24px;background:#e5eddf;color:#31472c;border-bottom:1px solid var(--edge);font-size:12px;line-height:1.5}.retention[data-risk=true]{background:#fff0cf;color:#634a15}.help{padding:16px!important;width:min(420px,calc(100vw - 36px))!important}.help h2{margin:16px 0 6px}.help h2:first-child{margin-top:0}.help p,.help li{font-size:12px;line-height:1.7;color:var(--muted)}.help ul{padding-left:18px}.sharing-note{font-size:12px;line-height:1.6;color:var(--muted);margin:12px 0 0}.notice{white-space:pre-line}.queue{font-variant-numeric:tabular-nums}
     @media(max-width:760px){aside h2{display:block;margin:16px 0 10px}}
     @media(max-height:500px) and (min-width:761px){.panel{inset:8px}header{padding:10px 18px}.stage{min-height:160px}section{padding:14px 18px}}
+    .panel[data-empty=true] .title,.panel[data-empty=true] .playbar,.panel[data-empty=true] section>.row{display:none}
+    .panel .viewer:not(:fullscreen) .stage{height:clamp(100px,calc(100dvh - 480px),330px)}
+    /* Capture stays outside every scrolling region; playback fits the viewport. */
+    header{flex:none}.capture-controls{flex:none;display:flex;align-items:center;gap:12px;padding:10px 24px;background:#edf1e7;border-bottom:1px solid var(--edge)}.capture-controls .arm-control{width:auto;flex:none;min-height:40px}.capture-controls p{font-size:12px;line-height:1.5;margin:0;color:var(--muted)}
+    .layout>section{padding:12px 20px}.title{margin-bottom:8px}.viewer:not(:fullscreen) .stage{aspect-ratio:auto;height:clamp(130px,calc(100dvh - 360px),360px);min-height:0;max-height:360px}.empty{padding:16px}.empty h2{font-size:19px}.empty p{margin:6px 0;line-height:1.5}.playbar{padding:4px 8px}.playbar .timeline input{min-height:28px}.playbar button{min-height:32px}.retention{padding:6px 24px}.capture-state{white-space:normal}
+    @media(max-width:760px){.capture-controls{padding:8px 14px;gap:8px;align-items:flex-start}.capture-controls p{font-size:11px}.layout{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);overflow:hidden}.layout>aside{padding:8px 14px;max-height:132px;overflow:auto}.layout>aside h2{font-size:13px;margin:0 0 6px}.library{margin-top:6px}.library button{padding:6px 8px}.search{min-height:30px;padding:5px 8px}.aside-note{display:none}.layout>section{overflow:auto;padding:10px 14px}.viewer:not(:fullscreen) .stage{height:clamp(110px,calc(100dvh - 480px),260px)}.title input{font-size:16px;flex-basis:auto;min-height:32px}.title{flex-wrap:nowrap}.save-video{padding:4px 6px;white-space:normal}.header-copy p{display:none}header{padding:10px 14px}.header-actions{gap:4px}.retention{font-size:11px;padding:6px 14px}.empty h2{font-size:17px}.empty svg{display:none}.empty p{font-size:12px}.empty{padding:10px}.capture-controls .arm-control{padding:6px 9px}.playbar .row{flex-wrap:wrap}}
+    @media(max-width:480px){header{gap:6px}h1{font-size:20px}.capture-controls{flex-wrap:wrap}.capture-controls p{flex:1;min-width:110px}.capture-state{font-size:11px}.header-actions{width:100%}.viewer:not(:fullscreen) .stage{height:clamp(100px,calc(100dvh - 520px),220px)}}
+    @media(max-width:760px){.panel .viewer:not(:fullscreen) .stage{height:clamp(100px,calc(100dvh - 580px),220px)}}
     </style>
     <div class="hud"><button data-id="open">Recordings</button><output data-id="hud">Recorder off</output><button data-id="quickmark" aria-label="Mark current moment">Mark</button></div>
     <div class="panel" role="dialog" aria-modal="true" aria-labelledby="bl-video-title" hidden>
@@ -58,7 +66,8 @@
           <p class="sub">Silent game video. Includes visible game names. 30 FPS is recommended for smooth capture.</p><p class="sub">Shortcuts: Space · play/pause, ←/→ · seek, I/O · trim, Ctrl+Shift+M · mark.</p>
         </div></details><button data-id="close" aria-label="Close recordings">Close</button></div></header>
       <p class="retention" data-id="retention" role="status"></p>
-      <div class="layout"><aside><button class="arm-control" data-id="arm" aria-pressed="false">Turn on auto-record</button><h2>Your matches</h2><input class="search" data-id="search" type="text" placeholder="Search recordings" aria-label="Filter completed recordings"><div class="library" data-id="library"></div>
+      <div class="capture-controls"><button class="arm-control" data-id="arm" aria-pressed="false">Turn on auto-record</button><p data-id="capture-hint">Auto-record captures matches you play in. Nothing records until you turn it on. Playback unlocks after the match.</p></div>
+      <div class="layout"><aside><h2>Your matches</h2><input class="search" data-id="search" type="text" placeholder="Search recordings" aria-label="Filter completed recordings"><div class="library" data-id="library"></div>
         <div class="aside-note"><p data-id="health"></p><meter data-id="memory-used" min="0" max="536870912" value="0" aria-label="Recording storage budget used"></meter><p data-id="storage"></p><p class="queue" data-id="capacity"></p><button class="secondary-link" data-id="mark" hidden>Mark moment</button><p data-id="storage-note">Save important videos to Downloads and check the files.</p></div>
       </aside><section>
         <div class="title"><input data-id="name" type="text" maxlength="80" aria-label="Recording name" placeholder="Select a recording"><button class="save-video" data-id="download">Save full video</button><details class="popover more"><summary aria-label="Recording actions">More</summary><div><button data-id="marks">Save timestamps</button><button class="danger" data-id="delete">Delete recording</button></div></details></div>
@@ -136,7 +145,8 @@
     }
     function refresh() {
       if (dead) return;
-       var s = service.status();
+       var s = service.status();panel.dataset.empty=String(!selected);
+       $('capture-hint').textContent=s.armed?'Auto-record is on for matches you participate in. Playback unlocks after the match.':'Auto-record is off. Turn it on to record matches you participate in. Playback unlocks after the match.';
        if(!s.canView)downloadJobs.forEach(c=>c.abort());
        var disk=!!s.storage&&s.storage.available,low=disk&&s.estimatedRemainingSeconds<3600,retention=disk?(low?'Less than one hour of estimated storage budget remains. Save/delete older cached videos or free disk before a long match. ':'')+'Local disk cache is not a backup. Clearing activity/profile data may delete videos; save important files to Downloads.':s.storage&&!s.storage.ready?'Preparing local disk storage…':'Memory only: closing or reloading the activity deletes unsaved videos. Hour-long capture requires local disk storage.';
        if($('retention').textContent!==retention)$('retention').textContent=retention;$('retention').dataset.risk=String(!disk||low);

@@ -1,6 +1,6 @@
 /* THESIS: a match-side checklist small enough to forget until needed.
  * OWN-WORLD: manager pearl/forest, Segoe UI, compact name rows and crate marks.
- * STORY: open Powers, mark observed boxes, clear for a new match; settings tuck away.
+ * STORY: open Power Tracker, mark observed boxes, edit names explicitly.
  * FIRST VIEWPORT: 216px draggable panel, four 28px rows, no dashboard chrome.
  * FORM: isolated activity Shadow DOM; manual state only, no game or network access.
  * BLPT interaction model: organpy/BLPT, MIT, copyright 2025 organ. */
@@ -33,16 +33,18 @@
     section[data-theme=dark]{--bg:#202b25;--row:#2e3e33;--fg:#f1f6eb;--muted:#c3d1bd;--accent:#c0dfa8;--on:#435e36;color-scheme:dark}
     section[data-theme=bobble]{--bg:#fff3d6;--row:#f4dfad;--fg:#562b23;--muted:#74462e;--accent:#7a3024;--on:#ebbd72}
     header{display:flex;align-items:center;gap:2px;padding:4px 4px 4px 10px;cursor:grab;touch-action:none;user-select:none;border-bottom:1px solid #87997a55}header:active{cursor:grabbing}
-    header strong{font-size:12px;font-weight:600;flex:1}.icon{display:grid;place-items:center;width:28px;height:28px;border:0;background:transparent;color:var(--muted);border-radius:4px;padding:6px}.icon:hover,.icon[aria-expanded=true]{background:var(--on);color:var(--fg)}
+    header strong{font-size:12px;font-weight:600;flex:1;min-width:0}.icon{display:grid;place-items:center;width:28px;height:28px;flex:none;border:0;background:transparent;color:var(--muted);border-radius:4px;padding:6px}.icon:hover,.icon[aria-expanded=true]{background:var(--on);color:var(--fg)}
     .rows{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;padding:5px}.player{display:flex;align-items:center;gap:8px;width:100%;min-width:0;min-height:30px;padding:4px 7px;border:1px solid transparent;border-radius:4px;background:var(--row);color:var(--fg);text-align:left}.player[aria-checked=true]{background:var(--on);border-color:#87997a}.crate{display:grid;place-items:center;color:var(--muted)}.player[aria-checked=true] .crate{color:var(--fg)}.player[aria-checked=true] .name{font-weight:600}.name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.key{flex:none;font-size:10px;font-variant-numeric:tabular-nums;color:var(--muted);max-width:78px;min-width:19px;text-align:center;padding:1px 4px;border:1px solid #87997a70;border-radius:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.key:empty{display:none}.player:hover{border-color:#87997a}
     form{padding:7px 9px 10px;border-top:1px solid #87997a55}.hint{font-size:11px;color:var(--muted);margin:0 0 8px}.editor-row{display:flex;gap:5px;margin-bottom:5px}input{min-width:0;width:100%;padding:5px;color:var(--fg);background:var(--row);border:1px solid #87997a;border-radius:3px}.binding{width:82px;flex:none;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     form button,select{min-height:30px;border:1px solid #87997a;border-radius:3px;color:var(--fg);background:var(--row);padding:4px 7px}form button:hover{background:var(--on)}button[type=submit]{background:var(--on);font-weight:600}.tools{display:flex;gap:5px;margin:9px 0;flex-wrap:wrap}select{max-width:100%}.notice{font-size:11px;color:var(--fg);margin:7px 0;overflow-wrap:anywhere}.notice:empty{display:none}.credit{display:block;font-size:10px;color:var(--muted);margin-top:10px}a{color:inherit;text-underline-offset:3px}button:disabled{opacity:.5;cursor:default}
+    .edit-names{display:block;margin:0 5px 5px;min-height:30px;width:calc(100% - 10px);border:1px solid #87997a70;border-radius:3px;background:var(--row);color:var(--fg);text-align:left;padding:4px 7px}.edit-names:hover{background:var(--on)}.name-field{display:block;flex:1;min-width:0}.name-field span{display:block;font-size:10px;color:var(--muted);margin-bottom:3px}.editor-row{align-items:end}
     @media(prefers-reduced-motion:no-preference){.player{transition:background-color 100ms ease-out}}
-  </style><button class="launcher" type="button" aria-controls="power-tracker-panel" aria-expanded="false">${svg('box')}Powers</button>
+  </style><button class="launcher" type="button" aria-controls="power-tracker-panel" aria-expanded="false">${svg('box')}Power Tracker</button>
   <section id="power-tracker-panel" data-theme="forest" aria-label="Manual power tracker" hidden>
-    <header><strong title="Drag to move · manual power marks">Powers</strong><button class="icon" id="clear" title="Clear all marks" aria-label="Clear all power marks">${svg('clear')}</button><button class="icon" id="settings" title="Names and shortcuts" aria-label="Edit tracker settings" aria-expanded="false">${svg('settings')}</button><button class="icon" id="hide" title="Hide tracker and pause its shortcuts" aria-label="Hide power tracker">${svg('close')}</button></header>
+    <header><strong title="Drag to move · manual power marks">Power Tracker</strong><button class="icon" id="clear" title="Clear all marks" aria-label="Clear all power marks">${svg('clear')}</button><button class="icon" id="settings" title="Names and shortcuts" aria-label="Edit tracker settings" aria-expanded="false">${svg('settings')}</button><button class="icon" id="hide" title="Hide tracker and pause its shortcuts" aria-label="Hide power tracker">${svg('close')}</button></header>
     <div class="rows" role="group" aria-label="Player power marks"></div>
-    <form hidden aria-label="Tracker settings"><p class="hint">Manual marks only. Shortcuts work here while shown, not while typing. Click a shortcut to change it; Backspace clears it.</p><div class="editors"></div><div class="tools"><button type="button" id="add">Add</button><button type="button" id="remove">Remove last</button><select aria-label="Tracker theme"><option value="forest">Forest</option><option value="dark">Dark</option><option value="bobble">Bobble</option></select><button type="button" id="reset-position">Reset position</button></div><p class="notice" role="status" aria-live="polite"></p><div class="tools"><button type="submit">Save</button><button type="button" id="cancel">Cancel</button></div><span class="credit">Based on <a href="https://github.com/organpy/BLPT" target="_blank" rel="noopener noreferrer">BLPT by organ</a> · MIT</span></form>
+    <button class="edit-names" type="button" id="edit-names" aria-expanded="false">Edit names</button>
+    <form hidden aria-label="Tracker settings"><p class="hint">Type player names below, then Save. Shortcuts pause while editing. Click a shortcut to change it; Backspace clears it.</p><div class="editors"></div><div class="tools"><button type="button" id="add">Add</button><button type="button" id="remove">Remove last</button><select aria-label="Tracker theme"><option value="forest">Forest</option><option value="dark">Dark</option><option value="bobble">Bobble</option></select><button type="button" id="reset-position">Reset position</button></div><p class="notice" role="status" aria-live="polite"></p><div class="tools"><button type="submit">Save</button><button type="button" id="cancel">Cancel</button></div><span class="credit">Based on <a href="https://github.com/organpy/BLPT" target="_blank" rel="noopener noreferrer">BLPT by organ</a> · MIT</span></form>
   </section>`;
   const $=s=>root.querySelector(s),panel=$('section'),form=$('form'),list=$('.rows'),notice=$('.notice');
   const listen=(target,event,fn,options={})=>target.addEventListener(event,fn,{...options,signal:abort.signal});
@@ -86,21 +88,27 @@
     const editors=$('.editors');editors.replaceChildren();
     draft.forEach((player,i)=>{
       const line=document.createElement('div');line.className='editor-row';
-      const name=document.createElement('input');name.value=player.name;name.maxLength=40;name.setAttribute('aria-label','Player '+(i+1)+' name');
+      const label=document.createElement('label');label.className='name-field';const title=document.createElement('span');title.textContent='Player '+(i+1)+' name';
+      const name=document.createElement('input');name.type='text';name.value=player.name;name.maxLength=40;name.autocomplete='off';name.spellcheck=false;name.setAttribute('aria-label',title.textContent);
       name.addEventListener('input',()=>{draft[i].name=name.value;});
       const key=document.createElement('button');key.type='button';key.className='binding';key.textContent=player.key||'No key';key.setAttribute('aria-label','Shortcut for player '+(i+1));
       key.addEventListener('click',()=>{capture={index:i,button:key};key.textContent='Press key…';notice.textContent='Press a shortcut. Escape cancels; Backspace removes it.';});
-      line.append(name,key);editors.append(line);
+      label.append(title,name);line.append(label,key);editors.append(line);
     });
     $('#add').disabled=draft.length>=10;$('#remove').disabled=draft.length<=1;
   }
   function edit(value=true){
-    editing=value;capture=null;form.hidden=!value;$('#settings').setAttribute('aria-expanded',String(value));
-    if(value){draft=clone().players;editorRows();$('select').value=clone().theme;notice.textContent=warning;requestAnimationFrame(clamp);}
+    editing=value;capture=null;form.hidden=!value;$('#settings').setAttribute('aria-expanded',String(value));$('#edit-names').setAttribute('aria-expanded',String(value));
+    if(value){draft=clone().players;editorRows();$('select').value=clone().theme;notice.textContent=warning;requestAnimationFrame(()=>{if(!editing||disposed)return;clamp();const input=$('.editor-row input');input?.focus({preventScroll:true});input?.select();input?.scrollIntoView({block:'nearest'});});}
     else if(open)$('#settings').focus();
   }
   listen($('.launcher'),'click',()=>show(!open));listen($('#hide'),'click',()=>show(false));listen($('#clear'),'click',clear);
   listen($('#settings'),'click',()=>edit(!editing));listen($('#cancel'),'click',()=>{edit(false);$('#settings').focus();});
+  listen($('#edit-names'),'click',()=>edit(!editing));
+  // Keep normal input defaults (typing, selection, paste and IME), but do not
+  // bubble addon controls into game/Discord handlers. Early capture protection
+  // in activity.js also shields names from Unity's window-capture listeners.
+  for(const type of ['keydown','keyup','keypress','pointerdown','pointerup','mousedown','mouseup','click','dblclick','touchstart','touchend'])listen(root,type,event=>event.stopPropagation());
   listen($('#add'),'click',()=>{if(draft.length<10){capture=null;draft.push({name:'Player '+(draft.length+1),key:''});editorRows();clamp();}});
   listen($('#remove'),'click',()=>{if(draft.length>1){capture=null;draft.pop();editorRows();}});
   listen($('#reset-position'),'click',()=>{panel.style.left='12px';panel.style.top='72px';panel.style.width='216px';panel.style.height='auto';clamp();savePlacement();});
@@ -139,6 +147,6 @@
   const cfg=clone();if(cfg.position){panel.style.left=cfg.position.x+'px';panel.style.top=cfg.position.y+'px';}
   if(cfg.size){panel.style.width=Math.max(190,cfg.size.width)+'px';panel.style.height=Math.max(152,cfg.size.height)+'px';}
   render();(document.body||document.documentElement).append(host);
-  window.__bobblePowerTracker=Object.freeze({show,hide:()=>show(false),clear,state:()=>({...model.state(),open,editing}),
+  window.__bobblePowerTracker=Object.freeze({show,hide:()=>show(false),clear,editNames(value=true){if(!open&&value)show(true);edit(value);},state:()=>({...model.state(),open,editing}),
     dispose(){if(disposed)return;disposed=true;abort.abort();host.remove();delete window.__bobblePowerTracker;return true;}});
 })();

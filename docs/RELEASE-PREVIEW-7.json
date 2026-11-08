@@ -1,0 +1,44 @@
+{
+  "tag": "v0.1.0-preview.7",
+  "payloadRelease": 19,
+  "prerelease": true,
+  "executable": {
+    "name": "BobbleWardrobe-Preview.exe",
+    "sha256": "8ad05ed44e5c2d678cb5628ba159a4490c43f417117daac59b6a310a4aa17615",
+    "bytes": 34261428,
+    "windowsCodeSigned": false
+  },
+  "payloadFiles": {
+    "main.cjs": {
+      "sha256": "0fe8df970a4c1503e349660b30d7eb6722c73a9d07b6c9ac65382ea3190f6296",
+      "bytes": 7948
+    },
+    "activity.js": {
+      "sha256": "fdfa9e63d6a2c8a93c256f66a2aff09154e7ea4b7d8f5eda0eef36e49af03762",
+      "bytes": 3081
+    },
+    "wardrobe-live.js": {
+      "sha256": "f61dec47baaf99df2366cd785a0297c4fc7e3195111bc1f7f55be3f7968b2272",
+      "bytes": 23103928
+    }
+  },
+  "signedFeed": {
+    "path": "wardrobe-quality-update.json",
+    "sha256": "362c0bb7b4615a66043676cd1678a09f8810b2372edeba08ce8f84e228668abb",
+    "bytes": 41093888,
+    "publicKey": "1eb3ff8adcaf701c287109fb33b66ddccfb7d0d274c14dbc6b04f410215b1f86"
+  },
+  "signedLauncherDescriptor": {
+    "path": "launcher-update.json",
+    "sha256": "335be20fa507b4490d7640aac6406e3d26170ac613535ed77a7649c60ee91500",
+    "bytes": 480,
+    "url": "https://github.com/Hydrogeners/bobble-wardrobe/releases/download/v0.1.0-preview.7/BobbleWardrobe-Preview.exe",
+    "release": 19
+  },
+  "legacyFeed": {
+    "path": "wardrobe-update.json",
+    "sha256": "242297bc4bf7439162f0a08f14c592c977dd8bef5342802aa4d6dadfeba1a770",
+    "unchanged": true
+  },
+  "validation": "Clean public-source quality build; nine-asset exact round trip; documented surface/UV/topology and rollback-seed hashes; native mock and tracker real-typing guard; recorder UI on/off and default layout at desktop/compact/mobile; actual short Chromium calibration encode/decode/clip/OPFS; recorder privacy/storage; installer/updater/signatures and packaged repair/single-instance/uninstall passed. Live appearance/performance, actual Discord OPFS, real-time hour-long gameplay and real provider/Discord sharing remain unverified. Private assistance excluded."
+}

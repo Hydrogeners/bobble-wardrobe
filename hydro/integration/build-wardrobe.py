@@ -29,7 +29,7 @@ assert source.startswith('// TEMPORARY') and source.endswith('})();\n')
 body = source[source.index("  'use strict';"):source.rfind('})();')]
 factory = 'window.__bobbleCreateVisual = function(options) {\n' + body + '};\n'
 catalog = [
-    {'id': 'hydro', 'name': 'Hydro', 'description': 'Redesigned detective cap, glasses, lavender tie & brown cape'},
+    {'id': 'hydro', 'name': 'HYDRO', 'description': 'Redesigned detective cap, glasses, lavender tie & brown cape'},
     {'id': 'miko', 'name': 'MIKO', 'description': 'Teal detective, brown fedora, gold monocle & tuxedo'},
     {'id': 'todo', 'name': 'TODO', 'description': 'Scarred grin, purple shirt, silver pendant & dark jacket'},
     {'id': 'jjcho', 'name': 'JJCHO', 'description': 'Graduation cap, gold tassel, curled moustache & red tie'},
@@ -37,7 +37,7 @@ catalog = [
     {'id': 'flair', 'name': 'FLAIR', 'description': 'White feathers, red eyes, gold beak & regal brown coat'},
     {'id': 'supa', 'name': 'SUPA', 'description': 'Red-and-white cap, blue jacket & yellow piping'},
     {'id': 'duolingo', 'name': 'DUOLINGO', 'description': 'Top hat, carrot nose, checked blue scarf & snowy coat'},
-    {'id': 'spark', 'name': 'Spark', 'description': 'Green hair and cape, flower cap, planet pendant & gold-leaf base'},
+    {'id': 'spark', 'name': 'SPARK', 'description': 'Green hair and cape, flower cap, planet pendant & gold-leaf base'},
 ]
 suffix='quality' if args.quality else 'fitted'
 models = {row['id']: json.loads((ROOT / ('visual-'+row['id']+'-'+suffix+'.json')).read_text()) for row in catalog}
@@ -75,9 +75,9 @@ bundle = '\n'.join([
     (ROOT / 'skin-showroom.js').read_text(encoding='utf-8'),
     '})();\n',
 ])
-assert len(bundle.encode()) <= (24 if args.quality else 6)*1024*1024, 'Signed update file-size budget exceeded'
+assert len(bundle.encode()) <= (24 if args.quality else 6)*1024*1024, 'Signed update file-size budget exceeded: '+str(len(bundle.encode()))+' bytes'
 (ROOT / 'wardrobe-live.js').write_text(bundle, encoding='utf-8')
-(ROOT / 'fitted-bundle-report.json').write_text(json.dumps({'variant':suffix,'assetBytes':len(raw),'bundledBytes':len(bundle.encode()),'decodedSHA256':hashlib.sha256(raw).hexdigest(),'skins':len(catalog),'compression':'gzip; fflate 0.8.3, MIT; quality geometry byte planes'},indent=2))
+(ROOT / 'fitted-bundle-report.json').write_text(json.dumps({'variant':suffix,'assetBytes':len(raw),'bundledBytes':len(bundle.encode()),'decodedSHA256':hashlib.sha256(raw).hexdigest(),'skins':len(catalog),'compression':'gzip; fflate 0.8.3, MIT; quality geometry and lossless texture row-delta byte planes'},indent=2))
 (ROOT / 'visual-factory.js').write_text(factory, encoding='utf-8')
 upgrade = """(() => {
   const old=window.__bobbleWardrobe;

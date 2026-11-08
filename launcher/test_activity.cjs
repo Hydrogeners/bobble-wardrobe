@@ -1,10 +1,13 @@
 const vm=require('node:vm'),fs=require('node:fs'),assert=require('node:assert/strict');
 const raw=fs.readFileSync(__dirname+'/activity.js','utf8');
-function boot(origin,build,existing=true,payload='window.__bobbleWardrobe={installed:true};window.__bobblePowerTracker={installed:true};window.__blReplay={installed:true};'){let interval,cleared=false;const window={};if(existing)window.__blUnity={Module:{asm:{ei:{}},codeUrl:'https://assets/'+build+'/CG6.wasm'}};
+function boot(origin,build,existing=true,payload='window.__bobbleWardrobe={installed:true};window.__bobblePowerTracker={installed:true};window.__blReplay={installed:true};'){let interval,cleared=false;const listeners=new Map(),window={addEventListener(type,handler){listeners.set(type,handler);}};window.listeners=listeners;if(existing)window.__blUnity={Module:{asm:{ei:{}},codeUrl:'https://assets/'+build+'/CG6.wasm'}};
  const context={window,location:{origin},setInterval(fn){interval=fn;return 1;},clearInterval(){cleared=true;},Date};vm.createContext(context);
  const code=raw.replace('__WARDROBE_PAYLOAD_STRING__',JSON.stringify(payload));
  vm.runInContext(code,context);return {window,context,code,tick:()=>interval?.(),cleared:()=>cleared};}
 const good=boot('https://947957217959759964.discordsays.com','Prod-590-CL28650');assert(good.window.__bobbleWardrobe.installed);assert.equal(good.window.__wardrobePortableBoot.phase,'installed');assert(good.cleared());
+let stopped=0,prevented=0;const input={tagName:'INPUT',getRootNode:()=>({host:{id:'bobble-power-tracker'}})};
+good.window.listeners.get('keydown')({type:'keydown',key:'a',composedPath:()=>[input],stopImmediatePropagation(){stopped++;},preventDefault(){prevented++;}});assert.equal(stopped,1);assert.equal(prevented,0,'tracker typing keeps browser defaults while blocking game capture');
+good.window.listeners.get('keydown')({type:'keydown',key:'a',composedPath:()=>[{tagName:'INPUT',getRootNode:()=>({host:{id:'game-chat'}})}],stopImmediatePropagation(){stopped++;},preventDefault(){prevented++;}});assert.equal(stopped,1,'unrelated input is never intercepted');
 const wrong=boot('https://947957217959759964.discordsays.com.evil.example','Prod-590-CL28650');assert(!wrong.window.__wardrobePortableBoot);assert(!wrong.window.__bobbleWardrobe);
 const build=boot('https://947957217959759964.discordsays.com','unknown-build');assert.equal(build.window.__wardrobePortableBoot.phase,'unsupported-build');assert(!build.window.__bobbleWardrobe);
 vm.runInContext(good.code,good.context);assert.equal(good.window.__wardrobePortableBoot.phase,'installed');

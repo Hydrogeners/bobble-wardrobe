@@ -7,11 +7,15 @@ PyQt dependency, game-memory reads or automatic power detection.
 ## Use
 
 Install/update **activity mods** in Bobble Addons with Discord Stable fully closed.
-Open Bobble League normally. **Powers**, at bottom-left, shows a compact draggable
+Open Bobble League normally. **Power Tracker**, at bottom-left, shows a compact draggable
 checklist. Click a player or use their shortcut to mark/unmark an observed power
 box. The header contains Clear marks, Settings and Hide. There is no dashboard.
 
-Settings contains names, optional shortcuts, theme and Add/Remove (1–10 players).
+Choose the visible **Edit names** button to rename players. The first name is
+focused/selected; type replacements and choose **Save**. **Cancel** or Escape
+discards the draft. Saved names remain after activity reload. The early bootstrap
+shields these fields from game keyboard capture; names never trigger power marks.
+The same editor contains optional shortcuts, theme and Add/Remove (1–10 players).
 Four players are the default. Click a shortcut and press a new combination;
 Backspace removes it, Escape cancels capture. Defaults: **1, 2, 3, 4** (no modifiers).
 The previous untouched Alt+Shift default scheme upgrades to plain numbers;

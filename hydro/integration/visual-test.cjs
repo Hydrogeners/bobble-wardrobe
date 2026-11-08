@@ -8,7 +8,7 @@ function setup(options={}){
   let id=1000,ptr=1024,handle=1,now=0,failed=false;
   const owned=new Set(),pins=new Set(),destroyed=[],writes=[],timers=new Map(),names=new Map([[110,'BODY_GEO'],[111,'HEAD_GEO'],[113,'BALL_GEO'],[112,'Team 6 Bull'],[120,'BODY_GEO'],[130,'Visuals'],[410,'Body_Snowsgiving'],[400,'Body_Male_TeamBear'],[401,'Head_Male01'],[403,'Ball'],[500,options.plainMaterial?'TeamBear':'TeamBearMAT'],[501,'TeamBearMAT'],[503,'TeamBearMAT']]);
   const meshes=new Map([[200,400],[201,401],[203,403],[210,410]]),mats=new Map([[300,500],[301,501],[303,503]]),counts=new Map(),tex=new Map(),events=new Map();
-  const M={HEAPU8:new Uint8Array(4*1024*1024),_malloc(n){const p=ptr;ptr+=n;return p;},_free(){}};
+  const M={HEAPU8:new Uint8Array(8*1024*1024),_malloc(n){const p=ptr;ptr+=n;return p;},_free(){}};
   const F=Object.fromEntries(['create','type','clone','destroy','white','resize','rawTexture','apply','setTexture','channel','indices','indexFormat','submeshes','bounds','setMesh','setMaterial','setName'].map(k=>[k,()=>{}]));
   M.HEAPF32=new Float32Array(M.HEAPU8.buffer);
   function call(k,...a){
@@ -92,11 +92,11 @@ for(const name of ['hydro','miko','todo','jjcho','augusto','flair','supa','duoli
  const s=setup();s.run(payload);assert.equal(s.window.__hydroModel.arm().phase,'active',name);
  s.window.__hydroModel.restore();assert.equal(s.meshes.get(200),400);assert.equal(s.meshes.get(201),401);assert.equal(s.meshes.get(203),403);assert.equal(s.owned.size,0);assert.equal(s.pins.size,0);tests++;
 }
-for(const size of [128,192,256,512]){
+for(const size of [128,192,256,512,1024]){
  const s=setup(),payload={...data,textureSize:size,palette:Buffer.alloc(size*size*4,255).toString('base64')};
  s.run(payload);assert.equal(s.window.__hydroModel.arm().phase,'active');s.window.__hydroModel.restore();assert.equal(s.owned.size,0);assert.equal(s.pins.size,0);tests++;
 }
-for(const size of [0,33,1024,'256']){
+for(const size of [0,33,2048,'256']){
  const s=setup();assert.throws(()=>s.run({...data,textureSize:size}),/Unsupported cosmetic texture/);assert.equal(s.owned.size,0);assert.equal(s.pins.size,0);assert.equal(s.writes.length,0);tests++;
 }
 {

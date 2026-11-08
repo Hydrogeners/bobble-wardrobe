@@ -238,7 +238,7 @@ window.__bobbleCreateVisual = function(options) {
     for(const kind of ['head','body','base'])meshes[kind]=makeMesh(kind,D.parts[kind],type);
     palette=own(call('clone',call('white')),'HYDRO test palette texture');
     const size=D.textureSize===undefined?32:D.textureSize;
-    if(![32,128,192,256,512].includes(size))throw Error('Unsupported cosmetic texture size');
+    if(![32,128,192,256,512,1024].includes(size))throw Error('Unsupported cosmetic texture size');
     const rgba=decode(D.palette);if(rgba.length!==size*size*4)throw Error('Invalid palette length');
     if(!call('resize',palette,size,size,4,0))throw Error('Palette texture allocation failed');
     nativeBuffer(rgba,p=>{if(!call('rawTexture',palette,p,rgba.length))throw Error('Palette upload failed');});call('apply',palette,0,0);

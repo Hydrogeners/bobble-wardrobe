@@ -37,5 +37,5 @@ for(const name of 'hydro miko todo jjcho augusto flair supa duolingo spark'.spli
  assert.equal(v.info().meshes,3,name);assert.equal(v.info().triangles,Object.values(payload.parts).reduce((sum,p)=>sum+p.indices/3,0));assert.equal(errors.length,0,name);v.dispose();
 }
 assert.equal(w.__bobbleTextureSize({}),32);assert.equal(w.__bobbleTextureSize({textureSize:256}),256);
-assert.throws(()=>w.__bobbleTextureSize({textureSize:1024}),/Unsupported/);
+assert.equal(w.__bobbleTextureSize({textureSize:1024}),1024);assert.throws(()=>w.__bobbleTextureSize({textureSize:2048}),/Unsupported/);
 console.log('Preview regression checks passed: real rig, buffer bounds, controls, cleanup, classic Nebula and all nine fitted textured payloads');

@@ -23,7 +23,7 @@ window.__transformBobblePreviewPart=function(p,n,kind){
 };
 window.__bobbleTextureSize=function(data){
   const size=data.textureSize===undefined?32:data.textureSize;
-  if(![32,128,192,256,512].includes(size))throw Error('Unsupported cosmetic texture size');
+  if(![32,128,192,256,512,1024].includes(size))throw Error('Unsupported cosmetic texture size');
   return size;
 };
 window.__createBobblePreview=function(canvas,onError){

@@ -8,7 +8,7 @@ try {
         if($Quality){$variantArgs=@('--quality');$env:BOBBLE_ASSET_VARIANT='quality'}else{throw 'The crumpled fitted model build is retired; use the quality build'}
         python build-wardrobe.py @variantArgs
         if($LASTEXITCODE -ne 0){throw 'Wardrobe asset bundle failed'}
-        python -m unittest -v test_fitted_assets.py test_visual_envelope.py test_nebula_rig.py test_base_styles.py test_native_scale.py
+        python -m unittest -v test_fitted_assets.py test_visual_envelope.py test_nebula_rig.py test_base_styles.py test_native_scale.py test_surface_repairs.py
         if($LASTEXITCODE -ne 0){throw 'Wardrobe geometry validation failed'}
         foreach($test in @('power-tracker-test.cjs','skin-team-test.cjs','compact-geometry-test.cjs','fitted-bundle-test.cjs','visual-test.cjs','preview-test.cjs','wardrobe-test.cjs','aim-accent-test.cjs')) {
             node $test @variantArgs
